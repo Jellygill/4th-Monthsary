@@ -142,8 +142,9 @@ function sampleTextPixels(
 
   const data = c.getImageData(0, 0, W, H).data;
 
-  // Use a denser 2px grid on mobile to ensure crisp text even with small fonts
-  const GRID = canvasW < 768 ? 2 : 3;
+  // Use a standard 3px grid. Now that the text is wrapped and fonts are larger,
+  // 3px is perfectly crisp on mobile, saves particle budget, and keeps text solid.
+  const GRID = 3;
   const grid: { x: number; y: number }[] = [];
   for (let y = 0; y < H; y += GRID) {
     for (let x = 0; x < W; x += GRID) {

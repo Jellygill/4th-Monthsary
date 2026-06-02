@@ -81,11 +81,11 @@ const FINAL_BODY =
   "There may be a lot of things changing around us right now,\nbut my choice remains the same.\n\nIt will always be you, hon.";
 
 // ── Sample text pixels from an offscreen canvas ──────────────────────────
-// Samples on a fixed dense grid so every sampled point has consistent spacing.
+// Returns the exact grid of pixels. By drawing every pixel on the grid, 
+// we guarantee perfect text without moiré patterns.
 function sampleTextPixels(
   text: string, canvasW: number, canvasH: number,
-  cx: number, cy: number, _scale: number,
-  targetCount: number
+  cx: number, cy: number, _scale: number
 ): { x: number; y: number }[] {
   const W = Math.floor(canvasW * 0.88);
   const H = Math.floor(canvasH * 0.22);
@@ -106,8 +106,8 @@ function sampleTextPixels(
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
 
-  // Collect lit pixels on a dense 2-pixel grid for high resolution.
-  const GRID = 2;
+  // Use a 3px grid for perfect balance of density and particle count
+  const GRID = 3;
   const grid: { x: number; y: number }[] = [];
   for (let y = 0; y < H; y += GRID) {
     for (let x = 0; x < W; x += GRID) {
@@ -119,32 +119,8 @@ function sampleTextPixels(
       }
     }
   }
-  if (grid.length === 0) return [];
-
-  // Shuffle grid to avoid geometric scanline artifacts (moiré pattern)
-  for (let i = grid.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [grid[i], grid[j]] = [grid[j], grid[i]];
-  }
-
-  // Map the collected grid points to the exact targetCount.
-  const out: { x: number; y: number }[] = [];
-  if (grid.length >= targetCount) {
-    // Take a random subset of pixels
-    for (let i = 0; i < targetCount; i++) {
-      out.push(grid[i]);
-    }
-  } else {
-    // If we have fewer pixels than particles, cycle and add tiny jitter for density glow.
-    for (let i = 0; i < targetCount; i++) {
-      const pt = grid[i % grid.length];
-      out.push({
-        x: pt.x + (Math.random() - 0.5) * 1.5,
-        y: pt.y + (Math.random() - 0.5) * 1.5
-      });
-    }
-  }
-  return out;
+  
+  return grid;
 }
 
 // ── Component ────────────────────────────────────────────────────────────
@@ -405,6 +381,18 @@ export default function HeartCanvas() {
       ctx.globalAlpha = 1.0;
     }
 
+    // ── draw a crisp solid dot for easter-egg text particles ─────────────────
+    function drawTextDot(x: number, y: number, opacity: number) {
+      const a = Math.min(1, Math.max(0, opacity));
+      if (a < 0.02) return;
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffcce0";
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+    }
+
     // ── heartbeat pulse ─────────────────────────────────────────────────
     function getRawPulse(t: number): number {
       const phase = (t % BEAT_PERIOD) / BEAT_PERIOD;
@@ -496,17 +484,24 @@ export default function HeartCanvas() {
       const msg = messages[eggClickCountRef.current % messages.length];
       eggClickCountRef.current += 1;
 
-      // Ask sampleTextPixels to return exactly EGG_N points spread evenly
-      // across every character — so all letters are covered, short or long.
+      // Get exactly the layout grid of the text.
       const candidates = particles.filter(p => p.state === "formed");
-      const use = Math.min(EGG_N, candidates.length);
-      const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 11, sc, use);
+      const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 11, sc);
       if (pts.length === 0) return;
 
-      // Shuffle candidates so particles come from all over the heart.
+      // If we have more points than particles, shuffle the points so we drop randomly instead of cutting off the bottom.
+      if (pts.length > candidates.length) {
+        for (let i = pts.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pts[i], pts[j]] = [pts[j], pts[i]];
+        }
+      }
+
+      // Map 1 particle to 1 exact point on the grid.
+      const useCount = Math.min(pts.length, candidates.length);
       const shuffled = candidates.slice().sort(() => Math.random() - 0.5);
 
-      for (let i = 0; i < pts.length; i++) {
+      for (let i = 0; i < useCount; i++) {
         const p = shuffled[i];
         p.etx = pts[i].x;
         p.ety = pts[i].y;
@@ -787,8 +782,8 @@ export default function HeartCanvas() {
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
 
         if (p.state === "easter_egg") {
-          // Use a bright, small glow sprite so it feels magical but remains readable
-          drawParticle(p.x, p.y, 0.45, Math.min(1, p.baseOpacity * 5.5 * globalBrightness), textSprite);
+          // Crisp solid dot for maximum readability
+          drawTextDot(p.x, p.y, Math.min(1, p.baseOpacity * 4.2 * globalBrightness));
         } else {
           drawParticle(p.x, p.y, p.size, op, p.sprite);
         }

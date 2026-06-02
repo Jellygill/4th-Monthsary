@@ -96,10 +96,10 @@ function sampleTextPixels(
   c.fillRect(0, 0, W, H);
   c.fillStyle = "#fff";
   let fs = Math.max(18, Math.floor(H * 0.52));
-  c.font = `900 ${fs}px Arial, sans-serif`;
+  c.font = `bold ${fs}px Arial, sans-serif`;
   while (c.measureText(text).width > W * 0.90 && fs > 12) {
     fs -= 1;
-    c.font = `900 ${fs}px Arial, sans-serif`;
+    c.font = `bold ${fs}px Arial, sans-serif`;
   }
   c.textAlign = "center";
   c.textBaseline = "middle";
@@ -387,7 +387,7 @@ export default function HeartCanvas() {
       if (a < 0.02) return;
       ctx.globalAlpha = a;
       ctx.beginPath();
-      ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+      ctx.arc(x, y, 1.15, 0, Math.PI * 2);
       ctx.fillStyle = "#ffcce0";
       ctx.fill();
       ctx.globalAlpha = 1.0;
@@ -1033,8 +1033,8 @@ export default function HeartCanvas() {
 
 // ── Music Player ─────────────────────────────────────────────────────────
 const TRACKS = [
-  { src: "bruno-mars.mp3",    label: "Bruno Mars" },
   { src: "marias.mp3",        label: "The Marías" },
+  { src: "bruno-mars.mp3",    label: "Bruno Mars" },
   { src: "daniel-caesar.mp3", label: "Daniel Caesar" },
 ];
 

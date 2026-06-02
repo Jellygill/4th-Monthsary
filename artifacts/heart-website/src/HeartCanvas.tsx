@@ -131,6 +131,7 @@ export default function HeartCanvas() {
   // Shared state between useEffects (no re-renders needed)
   const brightenRef      = useRef(false);
   const finalStateRef    = useRef(false);
+  const easterEggAllowedRef = useRef(false);
   const mouseRef         = useRef({ x: -9999, y: -9999 });
   // Beat sync: canvas sets resolver; text sequence awaits it
   const beatResolverRef  = useRef<(() => void) | null>(null);
@@ -468,7 +469,7 @@ export default function HeartCanvas() {
 
     // ── easter egg activation ────────────────────────────────────────────
     function activateEasterEgg() {
-      if (eggPhaseRef.current !== "idle" || appPhase !== "beating" || !finalStateRef.current) return;
+      if (eggPhaseRef.current !== "idle" || appPhase !== "beating" || !easterEggAllowedRef.current) return;
       const cx  = width / 2;
       const cy  = height * 0.46;
       const sc  = Math.min(width, height) * 0.0165;
@@ -634,7 +635,7 @@ export default function HeartCanvas() {
       // ── Show/hide easter egg caption ─────────────────────────
       const captionEl = document.getElementById("click-caption");
       if (captionEl) {
-        if (finalStateRef.current && eggPhaseRef.current === "idle") {
+        if (easterEggAllowedRef.current && eggPhaseRef.current === "idle") {
           captionEl.style.opacity = "0.65";
         } else {
           captionEl.style.opacity = "0";
@@ -989,6 +990,10 @@ export default function HeartCanvas() {
       wrap.appendChild(body);
       el.appendChild(wrap);
       await fadeAnim(wrap, 0, 1, 2400);
+      if (cancelled) return;
+      
+      // Finally, allow the user to click the heart for the easter egg surprise
+      easterEggAllowedRef.current = true;
     }
 
     run();

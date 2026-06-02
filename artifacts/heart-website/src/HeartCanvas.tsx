@@ -81,16 +81,14 @@ const FINAL_BODY =
   "There may be a lot of things changing around us right now,\nbut my choice remains the same.\n\nIt will always be you, hon.";
 
 // ── Sample text pixels from an offscreen canvas ──────────────────────────
-// Returns a FIXED-SIZE array of exactly `targetCount` points spread evenly
-// across all detected letter pixels — guaranteeing every character is
-// represented regardless of string length or raw pixel count.
+// Samples on a fixed grid (GRID_STEP px apart) so every sampled point
+// has the same 2-D spacing — no scanline-order gaps between characters.
 function sampleTextPixels(
   text: string, canvasW: number, canvasH: number,
   cx: number, cy: number, _scale: number,
   targetCount: number
 ): { x: number; y: number }[] {
   const W = Math.floor(canvasW * 0.88);
-  // Taller canvas = thicker strokes for better particle density
   const H = Math.floor(canvasH * 0.22);
   const tmp = document.createElement("canvas");
   tmp.width = W; tmp.height = H;
@@ -98,9 +96,9 @@ function sampleTextPixels(
   c.fillStyle = "#000";
   c.fillRect(0, 0, W, H);
   c.fillStyle = "#fff";
-  let fs = Math.max(20, Math.floor(H * 0.52));
+  let fs = Math.max(18, Math.floor(H * 0.52));
   c.font = `900 ${fs}px Arial, sans-serif`;
-  while (c.measureText(text).width > W * 0.90 && fs > 13) {
+  while (c.measureText(text).width > W * 0.90 && fs > 12) {
     fs -= 1;
     c.font = `900 ${fs}px Arial, sans-serif`;
   }
@@ -108,26 +106,30 @@ function sampleTextPixels(
   c.textBaseline = "middle";
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
-  // Collect ALL lit pixels first
-  const all: { x: number; y: number }[] = [];
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
+
+  // Collect lit pixels on a uniform 3-pixel grid.
+  // This guarantees consistent 3-px 2-D spacing between sample candidates.
+  const GRID = 3;
+  const grid: { x: number; y: number }[] = [];
+  for (let y = 0; y < H; y += GRID) {
+    for (let x = 0; x < W; x += GRID) {
       if (data[(y * W + x) * 4] > 30) {
-        all.push({
+        grid.push({
           x: cx + (x - W / 2),
           y: cy - _scale * 7 + (y - H / 2),
         });
       }
     }
   }
-  if (all.length === 0) return [];
-  // Sub-sample evenly so we always return exactly targetCount points
-  // spread proportionally across the full character set.
+  if (grid.length === 0) return [];
+
+  // Stride-select from the grid so we return exactly targetCount points
+  // spread proportionally across every character.
+  const use = Math.min(targetCount, grid.length);
+  const stride = grid.length / use;
   const out: { x: number; y: number }[] = [];
-  const use = Math.min(targetCount, all.length);
-  const stride = all.length / use;
   for (let i = 0; i < use; i++) {
-    out.push(all[Math.floor(i * stride)]);
+    out.push(grid[Math.floor(i * stride)]);
   }
   return out;
 }
@@ -384,17 +386,22 @@ export default function HeartCanvas() {
     ) {
       const a = Math.min(1, Math.max(0, opacity));
       if (a < 0.015) return;
-
       ctx.globalAlpha = a;
-      // High-resolution canvas rendering size
       const dSize = size * 14;
-      ctx.drawImage(
-        sprite,
-        x - dSize / 2,
-        y - dSize / 2,
-        dSize,
-        dSize
-      );
+      ctx.drawImage(sprite, x - dSize / 2, y - dSize / 2, dSize, dSize);
+      ctx.globalAlpha = 1.0;
+    }
+
+    // ── draw a crisp solid dot for easter-egg text particles ─────────────────
+    // No glow sprite — just a hard-edge circle so letters stay sharp.
+    function drawTextDot(x: number, y: number, opacity: number) {
+      const a = Math.min(1, Math.max(0, opacity));
+      if (a < 0.02) return;
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffb8d8";
+      ctx.fill();
       ctx.globalAlpha = 1.0;
     }
 
@@ -778,15 +785,12 @@ export default function HeartCanvas() {
         // Displaced particles dim very subtly — they're still beautiful, just displaced
         const displacedDim = (p.state === "scattered") ? 0.82 : 1.0;
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
-        // Easter-egg particles: uniform fixed size so dot density is even across all letters.
-        // Smaller size = more precise letterforms with no oversized blobs.
-        const EASTER_EGG_SIZE = 0.75;
-        const drawSize = p.state === "easter_egg" ? EASTER_EGG_SIZE : p.size;
-        const drawOp   = p.state === "easter_egg" ? Math.min(op * 3.2, 1) : op;
+
         if (p.state === "easter_egg") {
-          drawParticle(p.x, p.y, drawSize, drawOp, textSprite);
+          // Crisp solid dot — bypasses the glow sprite entirely so letters are sharp.
+          drawTextDot(p.x, p.y, Math.min(1, p.baseOpacity * 3.8 * globalBrightness));
         } else {
-          drawParticle(p.x, p.y, drawSize, drawOp, p.sprite);
+          drawParticle(p.x, p.y, p.size, op, p.sprite);
         }
       }
 
@@ -1043,29 +1047,30 @@ function MusicPlayer() {
   const audioRef                    = useRef<HTMLAudioElement>(null);
   const [isPlaying,  setIsPlaying]  = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const hasStartedRef               = useRef(false);
+  // Track whether user has ever interacted (for autoplay policy)
+  const unlockedRef = useRef(false);
 
-  // Auto-start on first user interaction anywhere on the page
+  // On mount: attempt autoplay immediately; if blocked, wait for first gesture.
   useEffect(() => {
-    function tryStart() {
-      if (hasStartedRef.current) return;
-      hasStartedRef.current = true;
-      const a = audioRef.current;
-      if (!a) return;
-      a.volume = 0.35;
-      a.play().then(() => setIsPlaying(true)).catch(() => {});
-    }
-    window.addEventListener("click",      tryStart, { once: true });
-    window.addEventListener("touchstart", tryStart, { once: true });
-    return () => {
-      window.removeEventListener("click",      tryStart);
-      window.removeEventListener("touchstart", tryStart);
-    };
-  }, []);
+    const a = audioRef.current;
+    if (!a) return;
+    a.volume = 0.35;
+    a.play()
+      .then(() => { unlockedRef.current = true; setIsPlaying(true); })
+      .catch(() => {
+        // Browser blocked autoplay — arm a one-shot gesture listener
+        function unlock() {
+          if (unlockedRef.current) return;
+          unlockedRef.current = true;
+          a.play().then(() => setIsPlaying(true)).catch(() => {});
+        }
+        window.addEventListener("pointerdown", unlock, { once: true });
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When track index changes (after a track ends), play the new one
+  // When track index changes, reload and play automatically
   useEffect(() => {
-    if (!hasStartedRef.current) return;
+    if (!unlockedRef.current) return;
     const a = audioRef.current;
     if (!a) return;
     a.load();
@@ -1079,6 +1084,7 @@ function MusicPlayer() {
   function togglePlay() {
     const a = audioRef.current;
     if (!a) return;
+    unlockedRef.current = true;
     if (isPlaying) {
       a.pause();
       setIsPlaying(false);
@@ -1086,6 +1092,8 @@ function MusicPlayer() {
       a.play().then(() => setIsPlaying(true)).catch(() => {});
     }
   }
+
+  const label = TRACKS[currentIdx].label;
 
   return (
     <>
@@ -1095,32 +1103,37 @@ function MusicPlayer() {
         onEnded={handleEnded}
         preload="auto"
       />
-      {/* Floating music toggle — top-right corner */}
+      {/* Music button — top-right, always visible */}
       <button
         onClick={togglePlay}
-        title={isPlaying ? `Now playing: ${TRACKS[currentIdx].label} — click to pause` : "Play music"}
+        title={isPlaying ? `♫ ${label} — click to pause` : `Play music (♫ ${label})`}
         style={{
           position: "absolute",
-          top: "16px",
-          right: "18px",
-          zIndex: 99,
-          background: "rgba(20, 5, 18, 0.75)",
-          border: "1px solid rgba(255,140,175,0.30)",
+          top: "14px",
+          right: "16px",
+          zIndex: 100,
+          background: isPlaying
+            ? "rgba(180, 30, 90, 0.55)"
+            : "rgba(20, 5, 18, 0.80)",
+          border: isPlaying
+            ? "1.5px solid rgba(255,140,175,0.70)"
+            : "1.5px solid rgba(255,140,175,0.35)",
           borderRadius: "50%",
-          width: "42px",
-          height: "42px",
+          width: "44px",
+          height: "44px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           cursor: "pointer",
-          backdropFilter: "blur(10px)",
+          backdropFilter: "blur(12px)",
           animation: isPlaying ? "musicPulse 2s infinite ease-in-out" : "none",
-          transition: "opacity 0.3s, border-color 0.3s",
-          opacity: isPlaying ? 0.85 : 0.55,
-          fontSize: "18px",
+          transition: "background 0.4s, border-color 0.4s, opacity 0.3s",
+          opacity: isPlaying ? 0.92 : 0.70,
+          fontSize: "20px",
           lineHeight: 1,
-          color: "rgba(255,198,212,0.92)",
+          color: isPlaying ? "#ffcce0" : "rgba(255,198,212,0.75)",
           padding: 0,
+          userSelect: "none",
         }}
       >
         {isPlaying ? "♫" : "♩"}

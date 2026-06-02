@@ -81,8 +81,7 @@ const FINAL_BODY =
   "There may be a lot of things changing around us right now,\nbut my choice remains the same.\n\nIt will always be you, hon.";
 
 // ── Sample text pixels from an offscreen canvas ──────────────────────────
-// Samples on a fixed grid (GRID_STEP px apart) so every sampled point
-// has the same 2-D spacing — no scanline-order gaps between characters.
+// Samples on a fixed dense grid so every sampled point has consistent spacing.
 function sampleTextPixels(
   text: string, canvasW: number, canvasH: number,
   cx: number, cy: number, _scale: number,
@@ -107,9 +106,8 @@ function sampleTextPixels(
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
 
-  // Collect lit pixels on a uniform 3-pixel grid.
-  // This guarantees consistent 3-px 2-D spacing between sample candidates.
-  const GRID = 3;
+  // Collect lit pixels on a dense 2-pixel grid for high resolution.
+  const GRID = 2;
   const grid: { x: number; y: number }[] = [];
   for (let y = 0; y < H; y += GRID) {
     for (let x = 0; x < W; x += GRID) {
@@ -123,13 +121,23 @@ function sampleTextPixels(
   }
   if (grid.length === 0) return [];
 
-  // Stride-select from the grid so we return exactly targetCount points
-  // spread proportionally across every character.
-  const use = Math.min(targetCount, grid.length);
-  const stride = grid.length / use;
+  // Map the collected grid points to the exact targetCount.
   const out: { x: number; y: number }[] = [];
-  for (let i = 0; i < use; i++) {
-    out.push(grid[Math.floor(i * stride)]);
+  if (grid.length >= targetCount) {
+    // If we have more pixels than particles, stride evenly.
+    const stride = grid.length / targetCount;
+    for (let i = 0; i < targetCount; i++) {
+      out.push(grid[Math.floor(i * stride)]);
+    }
+  } else {
+    // If we have fewer pixels than particles, cycle and add tiny jitter for density glow.
+    for (let i = 0; i < targetCount; i++) {
+      const pt = grid[i % grid.length];
+      out.push({
+        x: pt.x + (Math.random() - 0.5) * 1.5,
+        y: pt.y + (Math.random() - 0.5) * 1.5
+      });
+    }
   }
   return out;
 }
@@ -188,7 +196,7 @@ export default function HeartCanvas() {
     let prevMy = -9999;
 
     // Keep enough particles in the heart so the shape never looks cut in half.
-    const EGG_N = Math.min(1200, Math.floor(HEART_N * 0.42));
+    const EGG_N = HEART_N;
 
     // ── waitForBeat ────────────────────────────────────────────────────
     waitForBeatRef.current = () =>
@@ -389,19 +397,6 @@ export default function HeartCanvas() {
       ctx.globalAlpha = a;
       const dSize = size * 14;
       ctx.drawImage(sprite, x - dSize / 2, y - dSize / 2, dSize, dSize);
-      ctx.globalAlpha = 1.0;
-    }
-
-    // ── draw a crisp solid dot for easter-egg text particles ─────────────────
-    // No glow sprite — just a hard-edge circle so letters stay sharp.
-    function drawTextDot(x: number, y: number, opacity: number) {
-      const a = Math.min(1, Math.max(0, opacity));
-      if (a < 0.02) return;
-      ctx.globalAlpha = a;
-      ctx.beginPath();
-      ctx.arc(x, y, 2.2, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffb8d8";
-      ctx.fill();
       ctx.globalAlpha = 1.0;
     }
 
@@ -787,8 +782,8 @@ export default function HeartCanvas() {
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
 
         if (p.state === "easter_egg") {
-          // Crisp solid dot — bypasses the glow sprite entirely so letters are sharp.
-          drawTextDot(p.x, p.y, Math.min(1, p.baseOpacity * 3.8 * globalBrightness));
+          // Use a soft, small glow sprite so it feels magical but remains readable
+          drawParticle(p.x, p.y, 0.45, Math.min(1, p.baseOpacity * 3.8 * globalBrightness), textSprite);
         } else {
           drawParticle(p.x, p.y, p.size, op, p.sprite);
         }

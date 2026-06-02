@@ -137,8 +137,9 @@ export default function HeartCanvas() {
 
     const HEART_N       = 3000;
     const STAR_N        = 300;
-    const REPULSE_R     = 115;
-    const REPULSE_F     = 3.5;
+    const ATTRACT_R     = 145;   // radius of the magnetic field
+    const ATTRACT_F     = 0.82;  // very gentle pull force
+    const ATTRACT_DEAD  = 26;    // dead-zone — no force closer than this to cursor
     const BEAT_PERIOD   = 130;      // frames per heartbeat cycle
     const BEAT_PEAK_PH  = 0.10;    // normalised phase where first bump peaks
 
@@ -278,7 +279,7 @@ export default function HeartCanvas() {
     function drawHeartGlow(cx: number, cy: number, scale: number) {
       // Glow is warmer and stronger in final state, dimmer when disturbed
       const baseAlpha = finalStateRef.current ? 0.09 : 0.06;
-      const alpha = baseAlpha * globalBrightness * (1 - disturbanceRef.current * 0.5) * beatPulse;
+      const alpha = baseAlpha * globalBrightness * (1 + disturbanceRef.current * 0.55) * beatPulse;
       const radius = scale * (finalStateRef.current ? 13 : 11) * beatPulse;
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
       g.addColorStop(0, `rgba(230,70,110,${alpha})`);
@@ -356,7 +357,8 @@ export default function HeartCanvas() {
       const scale = Math.min(canvas.width, canvas.height) * 0.0165;
       const mx    = mouseRef.current.x;
       const my    = mouseRef.current.y;
-      const rr    = REPULSE_R * REPULSE_R;
+      const ar       = ATTRACT_R * ATTRACT_R;
+      const ar_dead2 = ATTRACT_DEAD * ATTRACT_DEAD;
 
       // ── Gathering phase ──────────────────────────────────────────────
       if (appPhase === "gathering") {
@@ -412,22 +414,22 @@ export default function HeartCanvas() {
       }
       prevPhase = curPhase;
 
-      // ── Disturbance factor ──────────────────────────────────────────
-      let distCount = 0;
-      for (const p of particles) {
-        if (p.state === "scattered" || p.state === "drifting_away") distCount++;
-      }
-      const rawDisturbance = distCount / HEART_N;
-      disturbanceRef.current += (rawDisturbance - disturbanceRef.current) * 0.04;
+      // ── Magnetic factor: cursor proximity to the heart ───────────────
+      // Rises to 1 when cursor is at heart centre; 0 when off-screen or far away
+      const onCanvas = mx > 0 && mx < canvas.width && my > 0 && my < canvas.height;
+      const hdx = mx - cx, hdy = my - cy;
+      const heartDist = Math.sqrt(hdx * hdx + hdy * hdy);
+      const rawMagnetic = onCanvas ? Math.max(0, 1 - heartDist / (scale * 22)) : 0;
+      disturbanceRef.current += (rawMagnetic - disturbanceRef.current) * 0.035;
       const d = disturbanceRef.current;
 
-      // ── Emotional feedback: beat strength & brightness ───────────────
-      const targetPulseStrength = 1 - d * 0.52;   // weaker beat when disturbed
+      // ── Emotional feedback: heart glows and beats stronger when drawn near
+      const targetPulseStrength = 1 + d * 0.18;   // slightly stronger when cursor approaches
       pulseStrength += (targetPulseStrength - pulseStrength) * 0.025;
 
       const finalBoost = finalStateRef.current ? 0.18 : 0;
       const brightenBoost = brightenRef.current ? 0.6 : 0;
-      const targetBrightness = 1.0 + brightenBoost + finalBoost - d * 0.38;
+      const targetBrightness = 1.0 + brightenBoost + finalBoost + d * 0.28;
       globalBrightness += (Math.max(0.4, targetBrightness) - globalBrightness) * 0.008;
 
       // ── Pulse ────────────────────────────────────────────────────────
@@ -482,15 +484,21 @@ export default function HeartCanvas() {
         p.twinkle += p.twinkleSpeed;
         const ta = 0.82 + 0.18 * Math.sin(p.twinkle);
 
-        // Mouse repulsion (skip easter-egg particles mid-display)
+        // Gentle magnetic attraction toward cursor (skip easter-egg particles)
         if (p.state !== "easter_egg") {
-          const rdx = p.x - mx, rdy = p.y - my;
-          const rd2 = rdx * rdx + rdy * rdy;
-          if (rd2 < rr && rd2 > 0.01) {
-            const rd  = Math.sqrt(rd2);
-            const str = (1 - rd / REPULSE_R) * REPULSE_F;
-            p.vx += (rdx / rd) * str;
-            p.vy += (rdy / rd) * str;
+          const adx = mx - p.x, ady = my - p.y;
+          const ad2 = adx * adx + ady * ady;
+          if (ad2 < ar && ad2 > ar_dead2) {
+            const ad = Math.sqrt(ad2);
+            // Ramp up from dead-zone edge, taper off at radius edge — smooth bell
+            const edgeFade = 1 - ad / ATTRACT_R;
+            const deadRamp = Math.min(1, (ad - ATTRACT_DEAD) / 32);
+            const str = edgeFade * deadRamp * ATTRACT_F;
+            p.vx += (adx / ad) * str;
+            p.vy += (ady / ad) * str;
+            // Soft velocity cap — keeps motion graceful, not frantic
+            const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+            if (spd > 2.6) { p.vx = (p.vx / spd) * 2.6; p.vy = (p.vy / spd) * 2.6; }
             if (p.state === "formed") p.state = "scattered";
           }
         }

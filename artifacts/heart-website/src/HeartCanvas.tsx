@@ -111,7 +111,7 @@ function sampleTextPixels(
       if (data[(y * W + x) * 4] > 80) {
         pts.push({
           x: cx + (x - W / 2),
-          y: cy - _scale * 20 + (y - H / 2),
+          y: cy - _scale * 7 + (y - H / 2),
         });
       }
     }
@@ -493,12 +493,20 @@ export default function HeartCanvas() {
       const my    = mouseRef.current.y;
       const onCanvas = mx > 0 && mx < canvas.width && my > 0 && my < canvas.height;
 
-      // Calculate mouse velocity for dragging
+      // Calculate and clamp mouse velocity to keep the drag graceful and slow
       let mvx = 0;
       let mvy = 0;
       if (prevMx > -9000 && mx > -9000 && onCanvas) {
-        mvx = mx - prevMx;
-        mvy = my - prevMy;
+        const rawMvx = mx - prevMx;
+        const rawMvy = my - prevMy;
+        const len = Math.sqrt(rawMvx * rawMvx + rawMvy * rawMvy);
+        if (len > 10) {
+          mvx = (rawMvx / len) * 10;
+          mvy = (rawMvy / len) * 10;
+        } else {
+          mvx = rawMvx;
+          mvy = rawMvy;
+        }
       }
       prevMx = mx;
       prevMy = my;
@@ -656,18 +664,18 @@ export default function HeartCanvas() {
             const falloff = smoothstep(REPULSE_R, REPULSE_DEAD, rd);  // 0 at edge, 1 near cursor
             
             // ── 1. Gentle repulsion force ──
-            const str = falloff * REPULSE_F;
+            const str = falloff * 0.15;
             p.vx += (rdx / rd) * str;
             p.vy += (rdy / rd) * str;
 
             // ── 2. Dragging force (nearby particles follow the swipe direction) ──
-            const dragStr = falloff * 0.16;
+            const dragStr = falloff * 0.08;
             p.vx += mvx * dragStr;
             p.vy += mvy * dragStr;
 
             // ── 3. Smooth velocity cap: the heart drifts gracefully like a fluid, never harsh ──
             const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-            const maxSpd = 1.5;
+            const maxSpd = 1.2;
             if (spd > maxSpd) { p.vx = (p.vx / spd) * maxSpd; p.vy = (p.vy / spd) * maxSpd; }
             if (p.state === "formed") p.state = "scattered";
           }
@@ -676,17 +684,17 @@ export default function HeartCanvas() {
         // State machine
         if (p.state === "easter_egg") {
           if (eggPhaseRef.current === "dissolving") {
-            // Return to heart ONLY — no egg spring fighting against it
-            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.048, 0.75);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.048, 0.75);
+            // Return to heart ONLY — gentler, slow spring
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.018, 0.82);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.018, 0.82);
             const dx = p.tx - p.x, dy = p.ty - p.y;
             if (dx * dx + dy * dy < 9 && Math.abs(p.vx) < 0.28 && Math.abs(p.vy) < 0.28) {
               p.state = "formed"; p.vx = 0; p.vy = 0;
             }
           } else {
-            // Spring toward egg text target
-            [p.x, p.vx] = springStep(p.x, p.vx, p.etx, 0.06, 0.74);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ety, 0.06, 0.74);
+            // Spring toward egg text target — slow, dreamy firefly glide
+            [p.x, p.vx] = springStep(p.x, p.vx, p.etx, 0.015, 0.85);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ety, 0.015, 0.85);
           }
 
         } else if (p.state === "formed") {
@@ -939,7 +947,7 @@ export default function HeartCanvas() {
         style={{
           position: "absolute",
           left: "50%",
-          bottom: "22%",
+          top: "16%",
           transform: "translateX(-50%)",
           fontFamily: "'Inter', system-ui, sans-serif",
           fontSize: "clamp(10px, 1.8vw, 12px)",

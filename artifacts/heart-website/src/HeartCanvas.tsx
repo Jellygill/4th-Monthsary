@@ -516,7 +516,7 @@ export default function HeartCanvas() {
         "Play with me next season sa ml hon ;<",
         "I was looking at your pictures while making this",
         "67 67 67",
-        "ikaw ang bubu sa buhay ko",
+        "I'm your dudu and you're my bubu",
         "Tell your friends may asawa ka na",
         "Caramel Sundae date with me?",
         "Tell Sage I said hi"

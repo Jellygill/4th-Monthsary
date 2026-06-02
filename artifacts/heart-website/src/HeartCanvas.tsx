@@ -548,6 +548,19 @@ export default function HeartCanvas() {
         p.state = "easter_egg";
         p.vx = 0; p.vy = 0;
       }
+
+      // Send ALL remaining particles away so the heart fully dissolves,
+      // making the text equally clear no matter where you tap.
+      for (let i = useCount; i < shuffled.length; i++) {
+        const p = shuffled[i];
+        // Scatter extras well beyond the visible canvas so they're invisible
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.max(width, height) * 1.2 + Math.random() * 200;
+        p.etx = cx + Math.cos(angle) * dist;
+        p.ety = cy + Math.sin(angle) * dist;
+        p.state = "easter_egg";
+        p.vx = 0; p.vy = 0;
+      }
       eggPhaseRef.current = "forming";
       eggTimerRef.current = 0;
     }

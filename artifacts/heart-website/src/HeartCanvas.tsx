@@ -60,13 +60,13 @@ interface Star { x: number; y: number; size: number; opacity: number; phase: num
 
 // ── Text messages ────────────────────────────────────────────────────────
 const MESSAGES = [
-  { text: "Some days are harder than others.",          pause: 3000 },
-  { text: "Some days feel overwhelming.",               pause: 3000 },
-  { text: "Some days things don't go the way we hoped.", pause: 3200 },
-  { text: "But even then...",                           pause: 2500 },
-  { text: "I'm still here.",                            pause: 4500, brighten: true },
+  { text: "Some days are harder than others.",          pause: 1800 },
+  { text: "Some days feel overwhelming.",               pause: 1800 },
+  { text: "Some days things don't go the way we hoped.", pause: 2000 },
+  { text: "But even then...",                           pause: 1500 },
+  { text: "I'm still here.",                            pause: 3000, brighten: true },
 ];
-const FINAL_TITLE = "Happy Monthsary, Honey ❤️";
+const FINAL_TITLE = "Happy 4th Monthsary, Honey 🩷";
 const FINAL_BODY =
   "There may be a lot of things changing around us right now,\nbut my choice remains the same.\n\nIt will always be you, hon.";
 
@@ -102,7 +102,7 @@ function sampleTextPixels(
       if (data[(y * W + x) * 4] > 100) {
         pts.push({
           x: cx + (x - W / 2),
-          y: cy - _scale * 6 + (y - H / 2),
+          y: cy - _scale * 20 + (y - H / 2),
         });
       }
     }
@@ -134,7 +134,7 @@ export default function HeartCanvas() {
     const ctx = canvas.getContext("2d")!;
     let raf: number;
 
-    const HEART_N       = 3800;
+    const HEART_N       = 2600;
     const STAR_N        = 300;
     const REPULSE_R     = 115;
     const REPULSE_F     = 3.5;
@@ -220,37 +220,22 @@ export default function HeartCanvas() {
       }
     }
 
-    // ── draw a single glowing particle ──────────────────────────────────
+    // ── draw a single glowing particle (1 gradient = 3× faster) ────────
     function drawParticle(
       x: number, y: number, size: number, opacity: number,
       r: number, g: number, b: number
     ) {
       const a = Math.min(1, Math.max(0, opacity));
-      if (a < 0.01) return;
-
-      // soft wide halo
-      const halo = ctx.createRadialGradient(x, y, 0, x, y, size * 7);
-      halo.addColorStop(0, `rgba(${r},${g},${b},${a * 0.17})`);
-      halo.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      if (a < 0.015) return;
+      const rad = size * 5.5;
+      // Single 3-stop gradient: white core → rose colour → transparent
+      const grd = ctx.createRadialGradient(x, y, 0, x, y, rad);
+      grd.addColorStop(0,    `rgba(255,238,242,${Math.min(a * 1.5, 1)})`);
+      grd.addColorStop(0.28, `rgba(${r},${g},${b},${a * 0.82})`);
+      grd.addColorStop(1,    `rgba(${r},${g},${b},0)`);
       ctx.beginPath();
-      ctx.arc(x, y, size * 7, 0, Math.PI * 2);
-      ctx.fillStyle = halo;
-      ctx.fill();
-
-      // inner glow
-      const inner = ctx.createRadialGradient(x, y, 0, x, y, size * 2.5);
-      inner.addColorStop(0, `rgba(255,228,232,${Math.min(a * 1.35, 1)})`);
-      inner.addColorStop(0.4, `rgba(${r},${g},${b},${a * 0.88})`);
-      inner.addColorStop(1, `rgba(${r},${g},${b},0)`);
-      ctx.beginPath();
-      ctx.arc(x, y, size * 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = inner;
-      ctx.fill();
-
-      // bright core
-      ctx.beginPath();
-      ctx.arc(x, y, size * 0.55, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,242,245,${Math.min(a * 1.5, 1)})`;
+      ctx.arc(x, y, rad, 0, Math.PI * 2);
+      ctx.fillStyle = grd;
       ctx.fill();
     }
 
@@ -390,7 +375,7 @@ export default function HeartCanvas() {
           drawParticle(p.x, p.y, p.size, p.opacity * ta, p.r, p.g, p.b);
         }
 
-        const mostlyFormed = gatherFrame > 380;
+        const mostlyFormed = gatherFrame > 300;
         if (mostlyFormed) {
           appPhase = "beating";
           for (const p of particles) {
@@ -655,7 +640,7 @@ export default function HeartCanvas() {
 
     async function run() {
       // Wait for heart to finish forming, then sync to next beat
-      await sleep(5200);
+      await sleep(4000);
       if (cancelled) return;
 
       for (const msg of MESSAGES) {

@@ -106,8 +106,8 @@ function sampleTextPixels(
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
 
-  // Use a 3px grid for perfect balance of density and particle count
-  const GRID = 3;
+  // Use a denser 2px grid on mobile to ensure crisp text even with small fonts
+  const GRID = canvasW < 768 ? 2 : 3;
   const grid: { x: number; y: number }[] = [];
   for (let y = 0; y < H; y += GRID) {
     for (let x = 0; x < W; x += GRID) {
@@ -468,7 +468,7 @@ export default function HeartCanvas() {
 
     // ── easter egg activation ────────────────────────────────────────────
     function activateEasterEgg() {
-      if (eggPhaseRef.current !== "idle" || appPhase !== "beating") return;
+      if (eggPhaseRef.current !== "idle" || appPhase !== "beating" || !finalStateRef.current) return;
       const cx  = width / 2;
       const cy  = height * 0.46;
       const sc  = Math.min(width, height) * 0.0165;
@@ -630,6 +630,16 @@ export default function HeartCanvas() {
       // ── Pulse ────────────────────────────────────────────────────────
       const rawPulse = getRawPulse(beatTime);
       beatPulse += (rawPulse - beatPulse) * 0.15;
+
+      // ── Show/hide easter egg caption ─────────────────────────
+      const captionEl = document.getElementById("click-caption");
+      if (captionEl) {
+        if (finalStateRef.current && eggPhaseRef.current === "idle") {
+          captionEl.style.opacity = "0.65";
+        } else {
+          captionEl.style.opacity = "0";
+        }
+      }
 
       // ── Update heart targets ─────────────────────────────────────────
       const heartPts = getHeartPoints(HEART_N, cx, cy, scale * beatPulse);
@@ -1017,8 +1027,8 @@ export default function HeartCanvas() {
           letterSpacing: "0.15em",
           textAlign: "center",
           whiteSpace: "nowrap",
-          opacity: 0.55,
-          transition: "opacity 1s ease-in-out",
+          opacity: 0,
+          transition: "opacity 1.5s ease-in-out",
           animation: "pulseGlow 2.5s infinite ease-in-out",
           textShadow: "0 0 10px rgba(255, 110, 145, 0.12)"
         }}

@@ -149,7 +149,7 @@ export default function HeartCanvas() {
     const STAR_N        = isMobile ? 150 : 300;
     // Repulsion parameters — wider breeze area, gentle force, plus cursor dragging!
     const REPULSE_R     = 165;   // noticeably wider interaction breeze (flowing water splash)
-    const REPULSE_F     = 0.65;  // modest direct push to keep movement extremely smooth & beautiful
+    const REPULSE_F     = 0.26;  // gentler push so interaction feels calm and readable
     const REPULSE_DEAD  = 8;     // tiny dead-zone at cursor centre
     const BEAT_PERIOD   = 130;      // frames per heartbeat cycle
     const BEAT_PEAK_PH  = 0.10;    // normalised phase where first bump peaks
@@ -333,7 +333,7 @@ export default function HeartCanvas() {
           driftAwayTimer: 0, driftAwayMax: 0,
           orbitAngle: Math.random() * Math.PI * 2,
           orbitR: Math.random() * 2.2 + 0.3,
-          orbitSpeed: (Math.random() * 0.007 + 0.002) * (Math.random() < 0.5 ? 1 : -1),
+          orbitSpeed: (Math.random() * 0.003 + 0.001) * (Math.random() < 0.5 ? 1 : -1),
           twinkle: Math.random() * Math.PI * 2,
           twinkleSpeed: Math.random() * 0.06 + 0.02,
           returnStiffness,
@@ -459,7 +459,7 @@ export default function HeartCanvas() {
       );
 
       eggClickCountRef.current += 1;
-      const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 5, sc);
+      const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 11, sc);
       if (pts.length === 0) return;
 
       // Shuffle pts so if we don't have enough particles, they are distributed uniformly across all letters
@@ -625,9 +625,9 @@ export default function HeartCanvas() {
             p.driftAwayTimer = 0;
             p.driftAwayMax   = 80 + Math.floor(Math.random() * 70);
             const angle = Math.random() * Math.PI * 2;
-            const speed = Math.random() * 1.5 + 0.5;
+            const speed = Math.random() * 0.55 + 0.18;
             p.vx = Math.cos(angle) * speed;
-            p.vy = Math.sin(angle) * speed - 0.3;
+            p.vy = Math.sin(angle) * speed - 0.12;
           }
         }
       }
@@ -675,13 +675,13 @@ export default function HeartCanvas() {
             p.vy += (rdy / rd) * str;
 
             // ── 2. Dragging force (nearby particles follow the swipe direction) ──
-            const dragStr = falloff * 0.08;
+            const dragStr = falloff * 0.03;
             p.vx += mvx * dragStr;
             p.vy += mvy * dragStr;
 
             // ── 3. Smooth velocity cap: the heart drifts gracefully like a fluid, never harsh ──
             const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-            const maxSpd = 1.2;
+            const maxSpd = 0.62;
             if (spd > maxSpd) { p.vx = (p.vx / spd) * maxSpd; p.vy = (p.vy / spd) * maxSpd; }
             if (p.state === "formed") p.state = "scattered";
           }
@@ -718,8 +718,8 @@ export default function HeartCanvas() {
             p.vx *= 0.94; p.vy *= 0.94;
           } else {
             // Spring return with per-particle personality — slow and dreamy return
-            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, p.returnStiffness * 0.15, p.returnDamping * 1.15);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, p.returnStiffness * 0.15, p.returnDamping * 1.15);
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, p.returnStiffness * 0.11, p.returnDamping * 1.2);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, p.returnStiffness * 0.11, p.returnDamping * 1.2);
             const dx = p.tx - p.x, dy = p.ty - p.y;
             if (dx * dx + dy * dy < 4 && Math.abs(p.vx) < 0.25 && Math.abs(p.vy) < 0.25) {
               p.state = "formed"; p.vx = 0; p.vy = 0;
@@ -741,8 +741,8 @@ export default function HeartCanvas() {
             [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
             [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
           } else {
-            const ks = p.returnStiffness * 0.18; // dreamy slow drift back
-            const kd = 0.91;
+            const ks = p.returnStiffness * 0.11; // dreamy slow drift back
+            const kd = 0.93;
             [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
             [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
           }
@@ -970,7 +970,7 @@ export default function HeartCanvas() {
         style={{
           position: "absolute",
           left: "50%",
-          bottom: "22%",
+          bottom: "2.5%",
           transform: "translateX(-50%)",
           fontFamily: "'Inter', system-ui, sans-serif",
           fontSize: "clamp(10px, 1.8vw, 12px)",

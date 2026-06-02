@@ -73,31 +73,36 @@ const FINAL_BODY =
 // ── Sample text pixels from an offscreen canvas ──────────────────────────
 function sampleTextPixels(
   text: string, canvasW: number, canvasH: number,
-  cx: number, cy: number, scale: number
+  cx: number, cy: number, _scale: number
 ): { x: number; y: number }[] {
-  const W = Math.floor(scale * 36);
-  const H = Math.floor(scale * 12);
+  // Use most of the canvas width so long strings like "For Mary Iris ❤️" never clip
+  const W = Math.floor(canvasW * 0.88);
+  const H = Math.floor(canvasH * 0.14);
   const tmp = document.createElement("canvas");
   tmp.width = W; tmp.height = H;
   const c = tmp.getContext("2d")!;
   c.fillStyle = "#000";
   c.fillRect(0, 0, W, H);
   c.fillStyle = "#fff";
-  const fs = Math.max(10, Math.floor(H * 0.55));
-  c.font = `300 ${fs}px 'Cormorant Garamond', Georgia, serif`;
+  // Fit font size so the text doesn't exceed W; start from H * 0.55 and shrink
+  let fs = Math.max(12, Math.floor(H * 0.55));
+  c.font = `400 ${fs}px Georgia, serif`;
+  while (c.measureText(text).width > W * 0.94 && fs > 10) {
+    fs -= 1;
+    c.font = `400 ${fs}px Georgia, serif`;
+  }
   c.textAlign = "center";
   c.textBaseline = "middle";
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
   const pts: { x: number; y: number }[] = [];
-  const step = 2;
+  const step = 3;
   for (let y = 0; y < H; y += step) {
     for (let x = 0; x < W; x += step) {
       if (data[(y * W + x) * 4] > 100) {
-        // map to canvas coordinates centred on heart
         pts.push({
-          x: cx + (x - W / 2) * 1.1,
-          y: cy + (y - H / 2) * 1.1,
+          x: cx + (x - W / 2),
+          y: cy - _scale * 6 + (y - H / 2),
         });
       }
     }
@@ -129,8 +134,8 @@ export default function HeartCanvas() {
     const ctx = canvas.getContext("2d")!;
     let raf: number;
 
-    const HEART_N       = 2400;
-    const STAR_N        = 260;
+    const HEART_N       = 3800;
+    const STAR_N        = 300;
     const REPULSE_R     = 115;
     const REPULSE_F     = 3.5;
     const BEAT_PERIOD   = 130;      // frames per heartbeat cycle
@@ -149,7 +154,7 @@ export default function HeartCanvas() {
     let prevPhase        = 0;     // to detect beat peak crossing
 
     // Egg particles: first ~500 particles are commandeered for easter egg
-    const EGG_N = 500;
+    const EGG_N = 700;
 
     // ── waitForBeat ────────────────────────────────────────────────────
     waitForBeatRef.current = () =>
@@ -496,17 +501,18 @@ export default function HeartCanvas() {
 
         // State machine
         if (p.state === "easter_egg") {
-          // Spring toward egg target
-          [p.x, p.vx] = springStep(p.x, p.vx, p.etx, 0.06, 0.74);
-          [p.y, p.vy] = springStep(p.y, p.vy, p.ety, 0.06, 0.74);
-          // When dissolving, spring back to heart
           if (eggPhaseRef.current === "dissolving") {
-            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.05, 0.76);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.05, 0.76);
+            // Return to heart ONLY — no egg spring fighting against it
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.048, 0.75);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.048, 0.75);
             const dx = p.tx - p.x, dy = p.ty - p.y;
-            if (dx * dx + dy * dy < 8 && Math.abs(p.vx) < 0.3 && Math.abs(p.vy) < 0.3) {
+            if (dx * dx + dy * dy < 9 && Math.abs(p.vx) < 0.28 && Math.abs(p.vy) < 0.28) {
               p.state = "formed"; p.vx = 0; p.vy = 0;
             }
+          } else {
+            // Spring toward egg text target
+            [p.x, p.vx] = springStep(p.x, p.vx, p.etx, 0.06, 0.74);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ety, 0.06, 0.74);
           }
 
         } else if (p.state === "formed") {

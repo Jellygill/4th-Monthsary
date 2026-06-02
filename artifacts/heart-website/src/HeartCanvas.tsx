@@ -870,11 +870,13 @@ export default function HeartCanvas() {
     canvas.addEventListener("mousemove", mm);
     canvas.addEventListener("mouseleave", onLeave);
     canvas.addEventListener("touchmove", tm, { passive: true });
+    canvas.addEventListener("touchstart", tm, { passive: true });
     canvas.addEventListener("touchend", onLeave);
     return () => {
       canvas.removeEventListener("mousemove", mm);
       canvas.removeEventListener("mouseleave", onLeave);
       canvas.removeEventListener("touchmove", tm);
+      canvas.removeEventListener("touchstart", tm);
       canvas.removeEventListener("touchend", onLeave);
     };
   }, []);
@@ -1011,7 +1013,7 @@ export default function HeartCanvas() {
 
       <canvas
         ref={canvasRef}
-        style={{ position: "absolute", inset: 0, display: "block", cursor: "default" }}
+        style={{ position: "absolute", inset: 0, display: "block", cursor: "default", touchAction: "none" }}
       />
       <div
         id="click-caption"

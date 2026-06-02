@@ -147,9 +147,9 @@ export default function HeartCanvas() {
     const isMobile      = window.innerWidth < 768;
     const HEART_N       = isMobile ? 1400 : 2500;
     const STAR_N        = isMobile ? 150 : 300;
-    // Repulsion parameters — breeze-like gust, very noticeable but elegant
-    const REPULSE_R     = 115;   // noticeably wider breeze area
-    const REPULSE_F     = 0.92;  // much more responsive breeze push
+    // Repulsion parameters — wider breeze area, gentle force, plus cursor dragging!
+    const REPULSE_R     = 135;   // noticeably wider interaction breeze
+    const REPULSE_F     = 0.35;  // modest direct push to keep movement extremely smooth & beautiful
     const REPULSE_DEAD  = 8;     // tiny dead-zone at cursor centre
     const BEAT_PERIOD   = 130;      // frames per heartbeat cycle
     const BEAT_PEAK_PH  = 0.10;    // normalised phase where first bump peaks
@@ -167,6 +167,10 @@ export default function HeartCanvas() {
     let prevPhase        = 0;     // to detect beat peak crossing
     // Track how many particles are currently displaced (0–1 normalised)
     let displacedFraction = 0.0;  // rises as particles scatter, falls as they return
+
+    // Mouse tracking velocity
+    let prevMx = -9999;
+    let prevMy = -9999;
 
     // Egg particles: first ~500 particles are commandeered for easter egg
     const EGG_N = Math.min(1000, Math.floor(HEART_N * 0.55));
@@ -436,21 +440,38 @@ export default function HeartCanvas() {
       const cx  = width / 2;
       const cy  = height * 0.46;
       const sc  = Math.min(width, height) * 0.0165;
-      const messages = ["For Mary Iris ❤️", "I love you hon ❤️"];
+      const messages = [
+        "For Mary Iris ❤️",
+        "I love you hon ❤️",
+        "Play with me next season sa ml hon ;<",
+        "I was looking at your pictures while making this",
+        "67 67 67",
+        "ikaw ang bubu sa buhay ko",
+        "Tell your friends may asawa ka na",
+        "Caramel Sundae date with me?",
+        "Tell Sage I said hi"
+      ];
       const msg = messages[eggClickCountRef.current % messages.length];
+
+      // Alternate: even clicks pull from left side, odd clicks pull from right side of heart
+      const candidates = particles.filter(p => 
+        eggClickCountRef.current % 2 === 0 ? p.baseTx < cx : p.baseTx >= cx
+      );
+
       eggClickCountRef.current += 1;
       const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 5, sc);
       if (pts.length === 0) return;
 
-      // Assign egg targets to first EGG_N particles
-      const use = Math.min(EGG_N, pts.length, HEART_N);
-      // Shuffle pts to pick uniformly distributed text pixels
-      for (let i = pts.length - 1; i > 0; i--) {
+      // Shuffle candidates so particles are chosen uniformly from that side of the heart
+      for (let i = candidates.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [pts[i], pts[j]] = [pts[j], pts[i]];
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
       }
+
+      // Assign egg targets to candidates
+      const use = Math.min(candidates.length, pts.length);
       for (let i = 0; i < use; i++) {
-        const p = particles[i];
+        const p = candidates[i];
         p.etx = pts[i].x;
         p.ety = pts[i].y;
         p.state = "easter_egg";
@@ -471,6 +492,16 @@ export default function HeartCanvas() {
       const mx    = mouseRef.current.x;
       const my    = mouseRef.current.y;
       const onCanvas = mx > 0 && mx < canvas.width && my > 0 && my < canvas.height;
+
+      // Calculate mouse velocity for dragging
+      let mvx = 0;
+      let mvy = 0;
+      if (prevMx > -9000 && mx > -9000 && onCanvas) {
+        mvx = mx - prevMx;
+        mvy = my - prevMy;
+      }
+      prevMx = mx;
+      prevMy = my;
 
       // ── Gathering phase ──────────────────────────────────────────────
       if (appPhase === "gathering") {
@@ -611,7 +642,7 @@ export default function HeartCanvas() {
         p.twinkle += p.twinkleSpeed;
         const ta = 0.82 + 0.18 * Math.sin(p.twinkle);
 
-        // ── Gentle repulsion: cursor pushes nearby particles away ────
+        // ── Gentle repulsion & Drag: cursor pushes and drags nearby particles ────
         // Skip easter-egg particles so they keep forming their letters.
         if (p.state !== "easter_egg" && onCanvas) {
           const rdx = p.x - mx;   // vector FROM cursor TO particle (repulsion direction)
@@ -623,13 +654,21 @@ export default function HeartCanvas() {
             // Force tapers from strong near cursor to zero at radius edge
             // smoothstep gives a very soft, cinematic falloff
             const falloff = smoothstep(REPULSE_R, REPULSE_DEAD, rd);  // 0 at edge, 1 near cursor
+            
+            // ── 1. Gentle repulsion force ──
             const str = falloff * REPULSE_F;
-            // Apply the nudge outward — soft, like a gentle breath
             p.vx += (rdx / rd) * str;
             p.vy += (rdy / rd) * str;
-            // Soft velocity cap: the heart is shaken, not shattered
+
+            // ── 2. Dragging force (nearby particles follow the swipe direction) ──
+            const dragStr = falloff * 0.16;
+            p.vx += mvx * dragStr;
+            p.vy += mvy * dragStr;
+
+            // ── 3. Smooth velocity cap: the heart drifts gracefully like a fluid, never harsh ──
             const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-            if (spd > 1.8) { p.vx = (p.vx / spd) * 1.8; p.vy = (p.vy / spd) * 1.8; }
+            const maxSpd = 1.5;
+            if (spd > maxSpd) { p.vx = (p.vx / spd) * maxSpd; p.vy = (p.vy / spd) * maxSpd; }
             if (p.state === "formed") p.state = "scattered";
           }
         }
@@ -678,8 +717,8 @@ export default function HeartCanvas() {
 
         } else if (p.state === "scattered") {
           // Spring return from cursor repulsion — per-particle spring for organic variation
-          // Slightly stiffer than drifting_away so the heart reassembles confidently
-          const ks = p.returnStiffness * 1.15;
+          // Slightly gentler to make the recovery extremely smooth, slow and graceful
+          const ks = p.returnStiffness * 0.85;
           const kd = p.returnDamping;
           [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
           [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
@@ -700,7 +739,7 @@ export default function HeartCanvas() {
 
       // Check if dissolving is done (all egg particles returned)
       if (eggPhaseRef.current === "dissolving") {
-        const stillEgg = particles.slice(0, EGG_N).some(p => p.state === "easter_egg");
+        const stillEgg = particles.some(p => p.state === "easter_egg");
         if (!stillEgg) eggPhaseRef.current = "idle";
       }
 
@@ -886,10 +925,35 @@ export default function HeartCanvas() {
 
   return (
     <div style={{ position: "fixed", inset: 0, overflow: "hidden" }}>
+      <style>{`
+        @keyframes pulseGlow {
+          0%, 100% { opacity: 0.20; transform: translateX(-50%) scale(0.97); }
+          50% { opacity: 0.55; transform: translateX(-50%) scale(1.03); }
+        }
+      `}</style>
       <canvas
         ref={canvasRef}
         style={{ position: "absolute", inset: 0, display: "block", cursor: "default" }}
       />
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: "22%",
+          transform: "translateX(-50%)",
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontSize: "clamp(10px, 1.8vw, 12px)",
+          color: "rgba(255, 198, 212, 0.42)",
+          pointerEvents: "none",
+          letterSpacing: "0.15em",
+          textAlign: "center",
+          whiteSpace: "nowrap",
+          animation: "pulseGlow 2.5s infinite ease-in-out",
+          textShadow: "0 0 10px rgba(255, 110, 145, 0.12)"
+        }}
+      >
+        ( touch the heart for a surprise 🩷 )
+      </div>
       <div
         ref={overlayRef}
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}

@@ -95,15 +95,51 @@ function sampleTextPixels(
   c.fillStyle = "#000";
   c.fillRect(0, 0, W, H);
   c.fillStyle = "#fff";
-  let fs = Math.max(18, Math.floor(H * 0.52));
+
+  // Split into lines on mobile if the text is long to prevent text shrinking too much
+  const lines: string[] = [];
+  if (canvasW < 768 && text.length > 18) {
+    const words = text.split(" ");
+    let currentLine = "";
+    for (const word of words) {
+      if ((currentLine + " " + word).length > 20) {
+        lines.push(currentLine.trim());
+        currentLine = word;
+      } else {
+        currentLine = currentLine ? currentLine + " " + word : word;
+      }
+    }
+    if (currentLine) lines.push(currentLine.trim());
+  } else {
+    lines.push(text);
+  }
+
+  // Find the longest line to determine the font size limit
+  let longestLine = "";
+  for (const line of lines) {
+    if (line.length > longestLine.length) {
+      longestLine = line;
+    }
+  }
+
+  let fs = Math.max(18, Math.floor((H / lines.length) * 0.52));
   c.font = `bold ${fs}px Arial, sans-serif`;
-  while (c.measureText(text).width > W * 0.90 && fs > 12) {
+  while (c.measureText(longestLine).width > W * 0.92 && fs > 12) {
     fs -= 1;
     c.font = `bold ${fs}px Arial, sans-serif`;
   }
+  c.font = `bold ${fs}px Arial, sans-serif`;
   c.textAlign = "center";
   c.textBaseline = "middle";
-  c.fillText(text, W / 2, H / 2);
+
+  const lineHeight = fs * 1.25;
+  const totalHeight = lines.length * lineHeight;
+  const startY = (H - totalHeight) / 2 + lineHeight / 2;
+
+  for (let i = 0; i < lines.length; i++) {
+    c.fillText(lines[i], W / 2, startY + i * lineHeight);
+  }
+
   const data = c.getImageData(0, 0, W, H).data;
 
   // Use a denser 2px grid on mobile to ensure crisp text even with small fonts

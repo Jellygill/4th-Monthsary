@@ -487,33 +487,23 @@ export default function HeartCanvas() {
       ];
       const msg = messages[eggClickCountRef.current % messages.length];
 
-      // Alternate: even clicks pull from left side, odd clicks pull from right side of heart
-      const candidates = particles.filter(p => 
-        eggClickCountRef.current % 2 === 0 ? p.baseTx < cx : p.baseTx >= cx
-      );
+      // Use all currently formed particles so long phrases have enough dots to stay readable.
+      const candidates = particles.filter(p => p.state === "formed");
 
       eggClickCountRef.current += 1;
       const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 11, sc);
       if (pts.length === 0) return;
 
-      // Shuffle pts so if we don't have enough particles, they are distributed uniformly across all letters
-      for (let i = pts.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pts[i], pts[j]] = [pts[j], pts[i]];
-      }
-
-      // Shuffle candidates so particles are chosen uniformly from that side of the heart
-      for (let i = candidates.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
-      }
-
-      // Assign egg targets to candidates
+      // Keep letter structure readable by downsampling points in-order instead of random shuffling.
+      // Random selection makes dotted noise; ordered stride preserves the text shape.
       const use = Math.min(candidates.length, pts.length);
+      const start = Math.floor(Math.random() * Math.max(1, pts.length - use + 1));
+      const step = use > 1 ? (pts.length - 1) / (use - 1) : 1;
       for (let i = 0; i < use; i++) {
         const p = candidates[i];
-        p.etx = pts[i].x;
-        p.ety = pts[i].y;
+        const pick = Math.min(pts.length - 1, Math.floor(start + i * step));
+        p.etx = pts[pick].x;
+        p.ety = pts[pick].y;
         p.state = "easter_egg";
         p.vx = 0; p.vy = 0;
       }

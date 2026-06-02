@@ -1,0 +1,85 @@
+Create a beautiful single-page romantic website called "The Heart That Keeps Beating."
+
+Theme:
+The website should symbolize staying together through difficult times. The focus is reassurance, comfort, and unwavering love rather than flashy romance.
+
+Visual Style:
+
+* Soft, subtle pink gradient background (light blush pink fading into a slightly deeper rose tone)
+* Thousands of tiny glowing particles
+* Elegant, cinematic atmosphere
+* Soft glow effects
+* Smooth animations
+* Mobile and desktop responsive
+* Modern typography
+* No photos
+* No bright colors except subtle white, silver, and soft red accents
+
+Opening Animation:
+
+* The screen starts almost empty.
+* Small glowing particles drift slowly across the screen.
+* The particles gradually gather into a large heart shape in the center.
+* The heart should appear alive and made entirely of particles.
+* It gently beats like a heartbeat.
+
+Special Effect:
+
+* The heart should not be perfectly stable.
+* Occasionally, small groups of particles drift away from the heart.
+* After a few moments, they slowly return.
+* The heart always reforms itself.
+* This symbolizes resilience and staying despite hardships.
+
+Text Sequence:
+Display each message one at a time with smooth fade transitions.
+
+Message 1:
+"Some days are harder than others."
+
+Pause 3 seconds.
+
+Message 2:
+"Some days feel overwhelming."
+
+Pause 3 seconds.
+
+Message 3:
+"Some days things don't go the way we hoped."
+
+Pause 3 seconds.
+
+Message 4:
+"But even then..."
+
+Pause 2 seconds.
+
+Message 5:
+"I'm still here."
+
+Pause 4 seconds.
+
+Final Message:
+"Happy Monthsary, Honey ❤️"
+
+Below it display:
+
+"There may be a lot of things changing around us right now, but my choice remains the same:
+it will always be you hon."
+
+Final Scene:
+
+* The heart continues beating forever.
+* Particles softly orbit around it.
+* Tiny sparkles drift upward.
+* The final message remains visible.
+* The experience should feel peaceful, comforting, hopeful, and emotionally sincere.
+
+Technical Requirements:
+
+* Use HTML, CSS, and JavaScript only.
+* Use Canvas for particle animation.
+* No external frameworks.
+* Smooth 60 FPS animations.
+* Clean, well-commented code.
+* Everything should be contained in a single HTML file.

@@ -84,22 +84,22 @@ function sampleTextPixels(
   c.fillStyle = "#000";
   c.fillRect(0, 0, W, H);
   c.fillStyle = "#fff";
-  // Fit font size so the text doesn't exceed W; start from H * 0.55 and shrink
-  let fs = Math.max(12, Math.floor(H * 0.55));
-  c.font = `400 ${fs}px Georgia, serif`;
-  while (c.measureText(text).width > W * 0.94 && fs > 10) {
+  // Bold weight + generous font size so strokes are thick and pixel-dense
+  let fs = Math.max(16, Math.floor(H * 0.62));
+  c.font = `700 ${fs}px Georgia, serif`;
+  while (c.measureText(text).width > W * 0.92 && fs > 12) {
     fs -= 1;
-    c.font = `400 ${fs}px Georgia, serif`;
+    c.font = `700 ${fs}px Georgia, serif`;
   }
   c.textAlign = "center";
   c.textBaseline = "middle";
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
   const pts: { x: number; y: number }[] = [];
-  const step = 3;
+  const step = 2;          // sample every 2nd pixel — 4× more points than step=3 used to give
   for (let y = 0; y < H; y += step) {
     for (let x = 0; x < W; x += step) {
-      if (data[(y * W + x) * 4] > 100) {
+      if (data[(y * W + x) * 4] > 80) {
         pts.push({
           x: cx + (x - W / 2),
           y: cy - _scale * 20 + (y - H / 2),
@@ -155,7 +155,7 @@ export default function HeartCanvas() {
     let prevPhase        = 0;     // to detect beat peak crossing
 
     // Egg particles: first ~500 particles are commandeered for easter egg
-    const EGG_N = 700;
+    const EGG_N = 1400;
 
     // ── waitForBeat ────────────────────────────────────────────────────
     waitForBeatRef.current = () =>
@@ -548,7 +548,10 @@ export default function HeartCanvas() {
         }
 
         const op = p.baseOpacity * ta * globalBrightness;
-        drawParticle(p.x, p.y, p.size, op, p.r, p.g, p.b);
+        // Easter-egg particles render tight and bright to keep letterforms crisp
+        const drawSize = p.state === "easter_egg" ? p.size * 0.45 : p.size;
+        const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.2, 1)   : op;
+        drawParticle(p.x, p.y, drawSize, drawOp, p.r, p.g, p.b);
       }
 
       // Check if dissolving is done (all egg particles returned)

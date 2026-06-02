@@ -1,0 +1,107 @@
+Use spring physics when particles return to the heart, so they slightly overshoot their target position before settling.
+
+PARTICLE SYSTEM AND ANIMATIONS
+
+The particle system should be the visual centerpiece of the website.
+
+Create thousands of tiny glowing particles using HTML5 Canvas.
+
+Particle Appearance:
+
+* Soft rose pink glow
+* Slight variation in size
+* Some particles brighter than others
+* Firefly or stardust aesthetic
+* No bubbles
+* No circles with thick outlines
+* No cartoon effects
+
+HEART FORMATION
+
+At the start:
+
+* Particles are scattered randomly across the screen.
+* They drift slowly and naturally.
+* Over 5-8 seconds they begin converging.
+* They gradually organize into a large heart shape at the center of the screen.
+* The formation should feel magical and organic rather than mechanical.
+
+The user should feel like the heart is being discovered rather than drawn.
+
+HEART BEHAVIOR
+
+Once formed:
+
+* The heart gently beats every few seconds.
+* Each heartbeat slightly expands and contracts the particle positions.
+* The effect should be subtle and elegant.
+* The heart should appear alive.
+
+The heart must never feel completely static.
+
+A small percentage of particles should occasionally drift away from the heart.
+
+After a short time:
+
+* Those particles naturally return.
+* The heart reconstructs itself.
+* The motion should be slow and graceful.
+
+INTERACTION
+
+Mouse movement and touch input should affect nearby particles.
+
+When the cursor passes through the heart:
+
+* Nearby particles are softly pushed away.
+* The heart temporarily loses its shape.
+* Particles scatter realistically.
+
+After the cursor moves away:
+
+* Particles slowly return to their assigned positions.
+* The heart reforms naturally.
+* The reconstruction should be smooth and satisfying.
+
+The interaction should feel emotional and symbolic, not playful.
+
+The user should feel like the heart is resilient rather than fragile.
+
+MOTION QUALITY
+
+Use easing functions and spring-like motion.
+
+Avoid:
+
+* Sharp movements
+* Instant snapping
+* Jittering
+* Mechanical movement
+
+Particles should glide smoothly and feel weightless.
+
+ATMOSPHERIC EFFECTS
+
+Around the heart:
+
+* Small drifting particles float independently.
+* Occasional sparkles appear and fade.
+* A soft glow surrounds the heart.
+* The glow subtly intensifies during each heartbeat.
+
+The overall feeling should resemble:
+
+* Fireflies gathering in the dark
+* Stardust forming a constellation
+* A living heart made of light
+
+VISUAL REFERENCE
+
+The animation quality should feel similar to:
+
+* Premium interactive art websites
+* Modern creative portfolio landing pages
+* Cinematic particle simulations
+* Luxury digital experiences
+
+The heart should look breathtaking even with all text removed.

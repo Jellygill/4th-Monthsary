@@ -525,7 +525,7 @@ export default function HeartCanvas() {
       eggClickCountRef.current += 1;
 
       // Get exactly the layout grid of the text.
-      const candidates = particles.filter(p => p.state === "formed");
+      const candidates = particles.filter(p => p.state !== "easter_egg");
       const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 11, sc);
       if (pts.length === 0) return;
 

@@ -105,7 +105,7 @@ function sampleTextPixels(
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
   const pts: { x: number; y: number }[] = [];
-  const step = 2;          // sample every 2nd pixel — 4× more points than step=3 used to give
+  const step = 1;          // sample every pixel for denser, clearer letterforms
   for (let y = 0; y < H; y += step) {
     for (let x = 0; x < W; x += step) {
       if (data[(y * W + x) * 4] > 80) {
@@ -151,7 +151,7 @@ export default function HeartCanvas() {
     const REPULSE_R     = 165;   // noticeably wider interaction breeze (flowing water splash)
     const REPULSE_F     = 0.26;  // gentler push so interaction feels calm and readable
     const REPULSE_DEAD  = 8;     // tiny dead-zone at cursor centre
-    const BEAT_PERIOD   = 130;      // frames per heartbeat cycle
+    const BEAT_PERIOD   = 185;      // slower, calmer heartbeat cycle
     const BEAT_PEAK_PH  = 0.10;    // normalised phase where first bump peaks
 
     const particles: Particle[] = [];
@@ -635,13 +635,13 @@ export default function HeartCanvas() {
       // ── Easter egg timer ─────────────────────────────────────────────
       if (eggPhaseRef.current === "forming" || eggPhaseRef.current === "holding") {
         eggTimerRef.current++;
-        // After ~3.5 s holding, dissolve
-        if (eggPhaseRef.current === "holding" && eggTimerRef.current > 210) {
+        // Hold longer so each wording is easy to read before dissolving
+        if (eggPhaseRef.current === "holding" && eggTimerRef.current > 420) {
           eggPhaseRef.current = "dissolving";
           eggTimerRef.current = 0;
         }
         // Transition forming → holding when particles settle
-        if (eggPhaseRef.current === "forming" && eggTimerRef.current > 90) {
+        if (eggPhaseRef.current === "forming" && eggTimerRef.current > 120) {
           eggPhaseRef.current = "holding";
           eggTimerRef.current = 0;
         }
@@ -756,8 +756,8 @@ export default function HeartCanvas() {
         const displacedDim = (p.state === "scattered") ? 0.82 : 1.0;
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
         // Easter-egg particles render tight and bright to keep letterforms crisp
-        const drawSize = p.state === "easter_egg" ? p.size * 0.45 : p.size;
-        const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.2, 1)   : op;
+        const drawSize = p.state === "easter_egg" ? p.size * 0.62 : p.size;
+        const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.5, 1)   : op;
         drawParticle(p.x, p.y, drawSize, drawOp, p.sprite);
       }
 

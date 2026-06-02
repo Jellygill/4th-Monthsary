@@ -69,11 +69,12 @@ interface Star { x: number; y: number; size: number; opacity: number; phase: num
 
 // ── Text messages ────────────────────────────────────────────────────────
 const MESSAGES = [
-  { text: "Some days are harder than others.",          pause: 1800 },
-  { text: "Some days feel overwhelming.",               pause: 1800 },
-  { text: "Some days things don't go the way we hoped.", pause: 2000 },
-  { text: "But even then...",                           pause: 1500 },
-  { text: "I'm still here.",                            pause: 3000, brighten: true },
+  { text: "Some days are harder than others.",           pause: 2500 },
+  { text: "Some days feel overwhelming.",                pause: 2500 },
+  { text: "Some days things don't go the way we hoped.", pause: 2800 },
+  { text: "But even then...",                            pause: 2200 },
+  { text: "We're still both here.",                      pause: 3200, brighten: true },
+  { text: "And we'll keep going together.",              pause: 3200, brighten: true },
 ];
 const FINAL_TITLE = "Happy 4th Monthsary, Honey 🩷";
 const FINAL_BODY =
@@ -338,7 +339,7 @@ export default function HeartCanvas() {
           sprite,
           state: "drifting_free",
           gatherDelay: Math.floor(
-            60 + (Math.abs(sx - cx) + Math.abs(sy - cy)) * 0.08 + Math.random() * 80
+            120 + (Math.abs(sx - cx) + Math.abs(sy - cy)) * 0.11 + Math.random() * 110
           ),
           driftAwayTimer: 0, driftAwayMax: 0,
           orbitAngle: Math.random() * Math.PI * 2,
@@ -370,6 +371,29 @@ export default function HeartCanvas() {
         dSize,
         dSize
       );
+      ctx.globalAlpha = 1.0;
+    }
+
+    // Sharper particle for text readability (used by easter egg lettering)
+    function drawTextParticle(x: number, y: number, size: number, opacity: number) {
+      const a = Math.min(1, Math.max(0, opacity));
+      if (a < 0.02) return;
+      const r = Math.max(0.65, size * 0.95);
+
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,238,244,1)";
+      ctx.fill();
+
+      // Tiny glow keeps letters visible without blurring edges.
+      ctx.shadowBlur = 7;
+      ctx.shadowColor = "rgba(255,138,174,0.55)";
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,188,212,0.9)";
+      ctx.fill();
+      ctx.shadowBlur = 0;
       ctx.globalAlpha = 1.0;
     }
 
@@ -538,14 +562,14 @@ export default function HeartCanvas() {
             if (gatherFrame >= p.gatherDelay) {
               p.state = "gathering";
             } else {
-              p.vx += (Math.random() - 0.5) * 0.04; p.vy += (Math.random() - 0.5) * 0.04;
+              p.vx += (Math.random() - 0.5) * 0.03; p.vy += (Math.random() - 0.5) * 0.03;
               p.vx *= 0.96; p.vy *= 0.96;
               p.x += p.vx;  p.y += p.vy;
             }
           }
           if (p.state === "gathering") {
-            [p.x, p.vx] = springStep(p.x, p.vx, p.baseTx, 0.018, 0.82);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.baseTy, 0.018, 0.82);
+            [p.x, p.vx] = springStep(p.x, p.vx, p.baseTx, 0.012, 0.85);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.baseTy, 0.012, 0.85);
             const dx = p.baseTx - p.x, dy = p.baseTy - p.y;
             if (dx * dx + dy * dy < 4) {
               p.state = "formed"; p.x = p.baseTx; p.y = p.baseTy; p.vx = 0; p.vy = 0;
@@ -555,7 +579,7 @@ export default function HeartCanvas() {
           drawParticle(p.x, p.y, p.size, p.opacity * ta, p.sprite);
         }
 
-        const mostlyFormed = gatherFrame > 420;
+        const mostlyFormed = gatherFrame > 620;
         if (mostlyFormed) {
           appPhase = "beating";
           for (const p of particles) {
@@ -766,9 +790,13 @@ export default function HeartCanvas() {
         const displacedDim = (p.state === "scattered") ? 0.82 : 1.0;
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
         // Easter-egg particles render tight and bright to keep letterforms crisp
-        const drawSize = p.state === "easter_egg" ? p.size * 0.62 : p.size;
-        const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.5, 1)   : op;
-        drawParticle(p.x, p.y, drawSize, drawOp, p.sprite);
+        const drawSize = p.state === "easter_egg" ? p.size * 0.9 : p.size;
+        const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.9, 1) : op;
+        if (p.state === "easter_egg") {
+          drawTextParticle(p.x, p.y, drawSize, drawOp);
+        } else {
+          drawParticle(p.x, p.y, drawSize, drawOp, p.sprite);
+        }
       }
 
       // Check if dissolving is done (all egg particles returned)
@@ -912,7 +940,7 @@ export default function HeartCanvas() {
         await sleep(msg.pause);
         await fadeAnim(div, 1, 0, 900);
         el.removeChild(div);
-        await sleep(260);
+        await sleep(520);
       }
       if (cancelled) return;
 

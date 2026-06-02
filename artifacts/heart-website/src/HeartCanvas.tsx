@@ -710,12 +710,12 @@ export default function HeartCanvas() {
       if (eggPhaseRef.current === "forming" || eggPhaseRef.current === "holding") {
         eggTimerRef.current++;
         // Hold longer so each wording is easy to read before dissolving
-        if (eggPhaseRef.current === "holding" && eggTimerRef.current > 420) {
+        if (eggPhaseRef.current === "holding" && eggTimerRef.current > 300) {
           eggPhaseRef.current = "dissolving";
           eggTimerRef.current = 0;
         }
         // Transition forming → holding when particles settle
-        if (eggPhaseRef.current === "forming" && eggTimerRef.current > 120) {
+        if (eggPhaseRef.current === "forming" && eggTimerRef.current > 90) {
           eggPhaseRef.current = "holding";
           eggTimerRef.current = 0;
         }

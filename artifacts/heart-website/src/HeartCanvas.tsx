@@ -108,9 +108,10 @@ function sampleTextPixels(
   const pts: { x: number; y: number }[] = [];
   const step = 1;          // sample every pixel for denser, clearer letterforms
   const isLongPhrase = text.length >= 28;
-  // Long phrases need extra density so letter strokes remain readable.
-  const alphaThreshold = isLongPhrase ? 55 : 80;
-  const extraCopies = isLongPhrase ? 2 : 1;
+  const isVeryLongPhrase = text.length >= 40;
+  // Longer phrases need more sampled stroke points to keep letters readable.
+  const alphaThreshold = isVeryLongPhrase ? 42 : (isLongPhrase ? 55 : 80);
+  const extraCopies = isVeryLongPhrase ? 3 : (isLongPhrase ? 2 : 1);
   for (let y = 0; y < H; y += step) {
     for (let x = 0; x < W; x += step) {
       if (data[(y * W + x) * 4] > alphaThreshold) {
@@ -120,8 +121,8 @@ function sampleTextPixels(
         // Duplicate long-phrase points with tiny jitter to increase apparent stroke density.
         for (let i = 1; i < extraCopies; i++) {
           pts.push({
-            x: baseX + (Math.random() - 0.5) * 0.8,
-            y: baseY + (Math.random() - 0.5) * 0.8,
+            x: baseX + (Math.random() - 0.5) * 0.35,
+            y: baseY + (Math.random() - 0.5) * 0.35,
           });
         }
       }
@@ -156,7 +157,7 @@ export default function HeartCanvas() {
     let raf: number;
 
     const isMobile      = window.innerWidth < 768;
-    const HEART_N       = isMobile ? 1400 : 2500;
+    const HEART_N       = isMobile ? 1800 : 3000;
     const STAR_N        = isMobile ? 150 : 300;
     // Repulsion parameters — wider breeze area, gentle force, plus cursor dragging!
     const REPULSE_R     = 165;   // noticeably wider interaction breeze (flowing water splash)
@@ -183,8 +184,8 @@ export default function HeartCanvas() {
     let prevMx = -9999;
     let prevMy = -9999;
 
-    // Egg particles: first ~500 particles are commandeered for easter egg
-    const EGG_N = Math.min(1000, Math.floor(HEART_N * 0.55));
+    // Allow most particles to be available for text so long phrases stay readable.
+    const EGG_N = Math.min(2400, Math.floor(HEART_N * 0.8));
 
     // ── waitForBeat ────────────────────────────────────────────────────
     waitForBeatRef.current = () =>
@@ -383,15 +384,21 @@ export default function HeartCanvas() {
       ctx.globalAlpha = a;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,238,244,1)";
+      ctx.fillStyle = "rgba(255,168,204,0.96)";
       ctx.fill();
 
-      // Tiny glow keeps letters visible without blurring edges.
-      ctx.shadowBlur = 7;
-      ctx.shadowColor = "rgba(255,138,174,0.55)";
+      // Pink glow keeps readability while preserving crisp edges.
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = "rgba(255,90,155,0.65)";
       ctx.beginPath();
-      ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,188,212,0.9)";
+      ctx.arc(x, y, r * 0.72, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,112,176,0.96)";
+      ctx.fill();
+
+      // Small bright center boosts legibility on dark backgrounds.
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.28, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,222,236,0.92)";
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1.0;
@@ -487,7 +494,7 @@ export default function HeartCanvas() {
       ];
       const msg = messages[eggClickCountRef.current % messages.length];
 
-      // Use all currently formed particles so long phrases have enough dots to stay readable.
+      // Use all available settled particles so long phrases have enough dots to stay readable.
       const candidates = particles.filter(p => p.state === "formed");
 
       eggClickCountRef.current += 1;
@@ -496,7 +503,7 @@ export default function HeartCanvas() {
 
       // Keep letter structure readable by downsampling points in-order instead of random shuffling.
       // Random selection makes dotted noise; ordered stride preserves the text shape.
-      const use = Math.min(candidates.length, pts.length);
+      const use = Math.min(EGG_N, candidates.length, pts.length);
       const start = Math.floor(Math.random() * Math.max(1, pts.length - use + 1));
       const step = use > 1 ? (pts.length - 1) / (use - 1) : 1;
       for (let i = 0; i < use; i++) {

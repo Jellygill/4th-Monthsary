@@ -54,7 +54,7 @@ interface Particle {
   etx: number; ety: number;         // easter-egg text target
   size: number;
   baseOpacity: number; opacity: number;
-  r: number; g: number; b: number;
+  sprite: HTMLCanvasElement;        // pre-rendered hardware-accelerated sprite
   state: PState;
   gatherDelay: number;
   driftAwayTimer: number; driftAwayMax: number;
@@ -144,11 +144,12 @@ export default function HeartCanvas() {
     const ctx = canvas.getContext("2d")!;
     let raf: number;
 
-    const HEART_N       = 3000;
-    const STAR_N        = 300;
-    // Repulsion parameters — gentle breeze, not an explosion
-    const REPULSE_R     = 80;    // small radius: only nearby particles are nudged
-    const REPULSE_F     = 0.38;  // soft force — a whisper, not a push
+    const isMobile      = window.innerWidth < 768;
+    const HEART_N       = isMobile ? 1400 : 2500;
+    const STAR_N        = isMobile ? 150 : 300;
+    // Repulsion parameters — breeze-like gust, very noticeable but elegant
+    const REPULSE_R     = 115;   // noticeably wider breeze area
+    const REPULSE_F     = 0.92;  // much more responsive breeze push
     const REPULSE_DEAD  = 8;     // tiny dead-zone at cursor centre
     const BEAT_PERIOD   = 130;      // frames per heartbeat cycle
     const BEAT_PEAK_PH  = 0.10;    // normalised phase where first bump peaks
@@ -168,16 +169,113 @@ export default function HeartCanvas() {
     let displacedFraction = 0.0;  // rises as particles scatter, falls as they return
 
     // Egg particles: first ~500 particles are commandeered for easter egg
-    const EGG_N = 1400;
+    const EGG_N = Math.min(1000, Math.floor(HEART_N * 0.55));
 
     // ── waitForBeat ────────────────────────────────────────────────────
     waitForBeatRef.current = () =>
       new Promise<void>((resolve) => { beatResolverRef.current = resolve; });
 
+    // ── Pre-rendered sprites for 60 FPS performance on mobile ───
+    const sprites: HTMLCanvasElement[] = [];
+    const SPRITE_COUNT = 16;
+    const SPRITE_SIZE = 64;
+
+    function buildSprites() {
+      sprites.length = 0;
+      for (let i = 0; i < SPRITE_COUNT; i++) {
+        const sCanvas = document.createElement("canvas");
+        sCanvas.width = SPRITE_SIZE;
+        sCanvas.height = SPRITE_SIZE;
+        const sctx = sCanvas.getContext("2d")!;
+        const col = roseColor();
+        const center = SPRITE_SIZE / 2;
+        const radius = SPRITE_SIZE / 2;
+
+        const halo = sctx.createRadialGradient(center, center, 0, center, center, radius);
+        halo.addColorStop(0,   `rgba(${col.r},${col.g},${col.b},0.28)`);
+        halo.addColorStop(0.5, `rgba(${col.r},${col.g},${col.b},0.09)`);
+        halo.addColorStop(1,   `rgba(${col.r},${col.g},${col.b},0)`);
+        sctx.beginPath();
+        sctx.arc(center, center, radius, 0, Math.PI * 2);
+        sctx.fillStyle = halo;
+        sctx.fill();
+
+        sctx.beginPath();
+        sctx.arc(center, center, SPRITE_SIZE * 0.05, 0, Math.PI * 2);
+        sctx.fillStyle = "rgba(255,242,246,1.0)";
+        sctx.fill();
+        sprites.push(sCanvas);
+      }
+    }
+
+    const orbitSprite = document.createElement("canvas");
+    const sparkleSprite = document.createElement("canvas");
+
+    function buildSpecialSprites() {
+      const size = SPRITE_SIZE;
+      const center = size / 2;
+      const radius = size / 2;
+
+      // Orbit sprite (rose pink)
+      orbitSprite.width = size;
+      orbitSprite.height = size;
+      const octx = orbitSprite.getContext("2d")!;
+      const oHalo = octx.createRadialGradient(center, center, 0, center, center, radius);
+      oHalo.addColorStop(0,   "rgba(240,120,150,0.30)");
+      oHalo.addColorStop(0.5, "rgba(240,120,150,0.10)");
+      oHalo.addColorStop(1,   "rgba(240,120,150,0)");
+      octx.beginPath();
+      octx.arc(center, center, radius, 0, Math.PI * 2);
+      octx.fillStyle = oHalo;
+      octx.fill();
+      octx.beginPath();
+      octx.arc(center, center, size * 0.05, 0, Math.PI * 2);
+      octx.fillStyle = "rgba(255,242,246,1.0)";
+      octx.fill();
+
+      // Sparkle sprite (bright pink)
+      sparkleSprite.width = size;
+      sparkleSprite.height = size;
+      const sctx = sparkleSprite.getContext("2d")!;
+      const sHalo = sctx.createRadialGradient(center, center, 0, center, center, radius);
+      sHalo.addColorStop(0,   "rgba(255,160,180,0.30)");
+      sHalo.addColorStop(0.5, "rgba(255,160,180,0.10)");
+      sHalo.addColorStop(1,   "rgba(255,160,180,0)");
+      sctx.beginPath();
+      sctx.arc(center, center, radius, 0, Math.PI * 2);
+      sctx.fillStyle = sHalo;
+      sctx.fill();
+      sctx.beginPath();
+      sctx.arc(center, center, size * 0.05, 0, Math.PI * 2);
+      sctx.fillStyle = "rgba(255,242,246,1.0)";
+      sctx.fill();
+    }
+
+    // Build the high-performance sprites once on mount
+    buildSprites();
+    buildSpecialSprites();
+
+    // Viewport dimensions in CSS pixels (used in all layout calculations)
+    let width  = window.innerWidth;
+    let height = window.innerHeight;
+
     // ── resize & build ─────────────────────────────────────────────────
     function resize() {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const dpr = window.devicePixelRatio || 1;
+      width  = window.innerWidth;
+      height = window.innerHeight;
+
+      // Set hardware/physical size
+      canvas.width  = width * dpr;
+      canvas.height = height * dpr;
+
+      // Maintain responsive layout size in CSS pixels
+      canvas.style.width  = `${width}px`;
+      canvas.style.height = `${height}px`;
+
+      // Scale drawings automatically
+      ctx.scale(dpr, dpr);
+
       buildStars();
       buildParticles();
       appPhase    = "gathering";
@@ -189,8 +287,8 @@ export default function HeartCanvas() {
       stars.length = 0;
       for (let i = 0; i < STAR_N; i++) {
         stars.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
+          x: Math.random() * width,
+          y: Math.random() * height,
           size: Math.random() * 1.1 + 0.2,
           opacity: Math.random() * 0.45 + 0.05,
           phase: Math.random() * Math.PI * 2,
@@ -201,19 +299,20 @@ export default function HeartCanvas() {
 
     function buildParticles() {
       particles.length = 0;
-      const cx = canvas.width / 2;
-      const cy = canvas.height * 0.46;
-      const scale = Math.min(canvas.width, canvas.height) * 0.0165;
+      const cx = width / 2;
+      const cy = height * 0.46;
+      const scale = Math.min(width, height) * 0.0165;
       const heartPts = getHeartPoints(HEART_N, cx, cy, scale);
 
       for (let i = 0; i < HEART_N; i++) {
         const hp  = heartPts[i];
-        const col = roseColor();
-        const sx  = (Math.random() - 0.5) * canvas.width  * 1.8 + cx;
-        const sy  = (Math.random() - 0.5) * canvas.height * 1.8 + cy;
+        const sx  = (Math.random() - 0.5) * width  * 1.8 + cx;
+        const sy  = (Math.random() - 0.5) * height * 1.8 + cy;
         // Each particle gets its own spring personality so recovery is organic
         const returnStiffness = 0.028 + Math.random() * 0.032; // 0.028–0.060
         const returnDamping   = 0.70  + Math.random() * 0.10;  // 0.70–0.80 (allows gentle overshoot)
+        const sprite = sprites[Math.floor(Math.random() * sprites.length)];
+        
         particles.push({
           x: sx, y: sy, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4,
           baseTx: hp.x, baseTy: hp.y,
@@ -222,7 +321,7 @@ export default function HeartCanvas() {
           size: Math.random() * 2.0 + 0.5,
           baseOpacity: Math.random() * 0.5 + 0.3,
           opacity: 0,
-          r: col.r, g: col.g, b: col.b,
+          sprite,
           state: "drifting_free",
           gatherDelay: Math.floor(
             60 + (Math.abs(sx - cx) + Math.abs(sy - cy)) * 0.08 + Math.random() * 80
@@ -239,30 +338,25 @@ export default function HeartCanvas() {
       }
     }
 
-    // ── draw a single glowing particle ──────────────────────────────────
+    // ── draw a single glowing particle using a pre-rendered sprite ───
     function drawParticle(
       x: number, y: number, size: number, opacity: number,
-      r: number, g: number, b: number
+      sprite: HTMLCanvasElement
     ) {
       const a = Math.min(1, Math.max(0, opacity));
       if (a < 0.015) return;
 
-      // Wide soft halo: the atmospheric glow around each particle
-      const haloR = size * 7;
-      const halo = ctx.createRadialGradient(x, y, 0, x, y, haloR);
-      halo.addColorStop(0,   `rgba(${r},${g},${b},${a * 0.22})`);
-      halo.addColorStop(0.5, `rgba(${r},${g},${b},${a * 0.08})`);
-      halo.addColorStop(1,   `rgba(${r},${g},${b},0)`);
-      ctx.beginPath();
-      ctx.arc(x, y, haloR, 0, Math.PI * 2);
-      ctx.fillStyle = halo;
-      ctx.fill();
-
-      // Bright pinpoint core — the key "stardust / firefly" detail
-      ctx.beginPath();
-      ctx.arc(x, y, size * 0.7, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,242,246,${Math.min(a * 1.6, 1)})`;
-      ctx.fill();
+      ctx.globalAlpha = a;
+      // High-resolution canvas rendering size
+      const dSize = size * 14;
+      ctx.drawImage(
+        sprite,
+        x - dSize / 2,
+        y - dSize / 2,
+        dSize,
+        dSize
+      );
+      ctx.globalAlpha = 1.0;
     }
 
     // ── heartbeat pulse ─────────────────────────────────────────────────
@@ -275,13 +369,13 @@ export default function HeartCanvas() {
 
     // ── background ───────────────────────────────────────────────────────
     function drawBackground() {
-      const cx = canvas.width / 2, cy = canvas.height / 2;
-      const bg = ctx.createRadialGradient(cx, cy * 0.8, 0, cx, cy, Math.max(canvas.width, canvas.height) * 0.85);
+      const cx = width / 2, cy = height / 2;
+      const bg = ctx.createRadialGradient(cx, cy * 0.8, 0, cx, cy, Math.max(width, height) * 0.85);
       bg.addColorStop(0, "#110818");
       bg.addColorStop(0.4, "#080510");
       bg.addColorStop(1, "#020308");
       ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, width, height);
       for (const s of stars) {
         s.phase += s.speed;
         const a = s.opacity * (0.45 + 0.55 * Math.sin(s.phase));
@@ -320,7 +414,7 @@ export default function HeartCanvas() {
         const ox = cx + Math.cos(ang) * r;
         const oy = cy + Math.sin(ang) * r * 0.72 - scale * 1.2;
         const a = (0.065 + 0.055 * Math.sin(beatTime * 0.012 + i * 0.35)) * beatPulse * globalBrightness;
-        drawParticle(ox, oy, 0.55, a, 240, 120, 150);
+        drawParticle(ox, oy, 0.55, a, orbitSprite);
       }
     }
 
@@ -332,20 +426,20 @@ export default function HeartCanvas() {
         const progress = (beatTime * 0.35 + i * 55) % (scale * 20);
         const sy = cy - scale * 9 - progress;
         const a = Math.max(0, (1 - progress / (scale * 20)) * 0.28 * globalBrightness);
-        drawParticle(sx, sy, 0.6, a, 255, 160, 180);
+        drawParticle(sx, sy, 0.6, a, sparkleSprite);
       }
     }
 
     // ── easter egg activation ────────────────────────────────────────────
     function activateEasterEgg() {
       if (eggPhaseRef.current !== "idle" || appPhase !== "beating") return;
-      const cx  = canvas.width / 2;
-      const cy  = canvas.height * 0.46;
-      const sc  = Math.min(canvas.width, canvas.height) * 0.0165;
+      const cx  = width / 2;
+      const cy  = height * 0.46;
+      const sc  = Math.min(width, height) * 0.0165;
       const messages = ["For Mary Iris ❤️", "I love you hon ❤️"];
       const msg = messages[eggClickCountRef.current % messages.length];
       eggClickCountRef.current += 1;
-      const pts = sampleTextPixels(msg, canvas.width, canvas.height, cx, cy - sc * 5, sc);
+      const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 5, sc);
       if (pts.length === 0) return;
 
       // Assign egg targets to first EGG_N particles
@@ -403,7 +497,7 @@ export default function HeartCanvas() {
             }
           }
           const ta = 0.80 + 0.20 * Math.sin(p.twinkle);
-          drawParticle(p.x, p.y, p.size, p.opacity * ta, p.r, p.g, p.b);
+          drawParticle(p.x, p.y, p.size, p.opacity * ta, p.sprite);
         }
 
         const mostlyFormed = gatherFrame > 420;
@@ -601,7 +695,7 @@ export default function HeartCanvas() {
         // Easter-egg particles render tight and bright to keep letterforms crisp
         const drawSize = p.state === "easter_egg" ? p.size * 0.45 : p.size;
         const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.2, 1)   : op;
-        drawParticle(p.x, p.y, drawSize, drawOp, p.r, p.g, p.b);
+        drawParticle(p.x, p.y, drawSize, drawOp, p.sprite);
       }
 
       // Check if dissolving is done (all egg particles returned)

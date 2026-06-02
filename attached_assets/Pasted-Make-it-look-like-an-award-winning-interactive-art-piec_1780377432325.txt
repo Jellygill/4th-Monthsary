@@ -1,0 +1,158 @@
+Make it look like an award-winning interactive art piece rather than a romantic greeting card.
+
+Create a cinematic single-page interactive website called "The Heart That Keeps Beating."
+
+This is NOT a Valentine's Day card, wedding invitation, scrapbook, or cute pink aesthetic website.
+
+The goal is to create a deeply emotional and visually stunning experience about reassurance, resilience, staying together through difficult times, and unconditional love.
+
+DESIGN DIRECTION
+
+The website should feel like:
+
+* A short animated film
+* Elegant and modern
+* Quiet and emotional
+* Minimalist
+* Premium quality
+* Cinematic lighting
+* Atmospheric and immersive
+
+Avoid:
+
+* Bright pink backgrounds
+* Greeting card aesthetics
+* Clipart hearts
+* Bubble effects
+* Decorative cursive fonts
+* Excessive colors
+* Anything that feels childish or templated
+
+VISUAL STYLE
+
+Background:
+
+* Deep black fading into dark navy (#070B14)
+* Subtle animated particles floating in the distance
+* Very faint star-like specks
+* Soft ambient glow
+
+Heart Animation:
+
+* The heart is the centerpiece.
+* It is formed entirely from thousands of tiny glowing particles.
+* The particles should look like fireflies or stardust.
+* No visible heart outline.
+* No bubbles.
+* No cartoon effects.
+
+The heart slowly forms from scattered particles.
+
+Once formed:
+
+* It gently beats like a real heartbeat.
+* Tiny particles occasionally drift away.
+* After a few moments they return.
+* The heart never fully breaks.
+* It continuously rebuilds itself.
+
+This symbolizes enduring love despite hardships.
+
+ATMOSPHERE
+
+Everything should move slowly.
+
+The experience should feel:
+
+* peaceful
+* comforting
+* hopeful
+* intimate
+* mature
+
+Think:
+Interstellar.
+A quiet night sky.
+Fireflies gathering.
+A heartbeat in the dark.
+
+TEXT EXPERIENCE
+
+Display only one message at a time.
+
+The heart remains visible throughout.
+
+Message 1:
+"Some days are harder than others."
+
+Fade out.
+
+Message 2:
+"Some days feel overwhelming."
+
+Fade out.
+
+Message 3:
+"Some days things don't go the way we hoped."
+
+Fade out.
+
+Message 4:
+"But even then..."
+
+Pause.
+
+Message 5:
+"I'm still here."
+
+The heart glows slightly brighter.
+
+Pause.
+
+FINAL SCENE
+
+The heart becomes more stable.
+
+Display:
+
+Happy Monthsary, Honey ❤️
+
+Below it:
+
+"There may be a lot of things changing around us right now,
+but my choice remains the same.
+
+It will always be you, hon."
+
+Typography:
+
+* Elegant modern serif for headings
+* Clean minimalist sans-serif for body text
+* White text
+* Soft glow
+* Perfect spacing
+
+FINAL EFFECT
+
+The website does not end.
+
+The heart continues beating forever.
+
+Particles gently orbit around it.
+
+Occasional sparkles drift upward.
+
+The final message remains on screen.
+
+The user should feel comforted, reassured, and loved.
+
+TECHNICAL REQUIREMENTS
+
+* Single HTML file
+* HTML, CSS, and JavaScript only
+* Canvas-based particle system
+* Smooth animations
+* Mobile responsive
+* Modern glassmorphism effects only when subtle
+* Professional-level visual quality
+* Prioritize beauty and atmosphere over flashy effects

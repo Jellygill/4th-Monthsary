@@ -1,461 +1,490 @@
 import { useEffect, useRef } from "react";
 
+// ── Heart parametric equation ──────────────────────────────────────────────
+function heartX(t: number) { return 16 * Math.pow(Math.sin(t), 3); }
+function heartY(t: number) {
+  return -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+}
+function getHeartPoints(n: number, cx: number, cy: number, scale: number) {
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / n) * Math.PI * 2;
+    pts.push({ x: cx + heartX(t) * scale, y: cy + heartY(t) * scale });
+  }
+  return pts;
+}
+
+// ── Easing ─────────────────────────────────────────────────────────────────
+function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3); }
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// ── Particle ───────────────────────────────────────────────────────────────
 interface Particle {
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  vx: number;
-  vy: number;
+  x: number; y: number;
+  tx: number; ty: number;          // current heart target (pulsed)
+  baseTx: number; baseTy: number;  // un-pulsed heart target
+  vx: number; vy: number;
+  size: number;
+  baseOpacity: number;
+  opacity: number;
+  hue: number;                     // 0-360, warm gold-white range
+  gathered: boolean;
+  drifting: boolean;
+  driftTimer: number;
+  driftMax: number;
+  driftVx: number; driftVy: number;
+  orbitAngle: number;
+  orbitR: number;
+  orbitSpeed: number;
+}
+
+// ── Star field ─────────────────────────────────────────────────────────────
+interface Star {
+  x: number; y: number;
   size: number;
   opacity: number;
-  color: string;
-  phase: "gathering" | "formed" | "drifting" | "returning";
-  driftTimer: number;
-  driftDuration: number;
-  orbitAngle: number;
-  orbitRadius: number;
-  orbitSpeed: number;
-  sparkle: boolean;
-  sparkleTimer: number;
+  twinkleSpeed: number;
+  twinklePhase: number;
 }
 
-interface TextMessage {
-  text: string;
-  pause: number;
-}
-
-const MESSAGES: TextMessage[] = [
+// ── Text sequence ──────────────────────────────────────────────────────────
+const MESSAGES = [
   { text: "Some days are harder than others.", pause: 3000 },
   { text: "Some days feel overwhelming.", pause: 3000 },
-  { text: "Some days things don't go the way we hoped.", pause: 3000 },
-  { text: "But even then...", pause: 2000 },
-  { text: "I'm still here.", pause: 4000 },
+  { text: "Some days things don't go the way we hoped.", pause: 3200 },
+  { text: "But even then...", pause: 2500 },
+  { text: "I'm still here.", pause: 4500, brighten: true },
 ];
-
 const FINAL_TITLE = "Happy Monthsary, Honey ❤️";
-const FINAL_SUBTITLE =
-  "There may be a lot of things changing around us right now,\nbut my choice remains the same:\nit will always be you hon.";
+const FINAL_BODY =
+  "There may be a lot of things changing around us right now,\nbut my choice remains the same.\n\nIt will always be you, hon.";
 
-function heartX(t: number): number {
-  return 16 * Math.pow(Math.sin(t), 3);
-}
-
-function heartY(t: number): number {
-  return -(
-    13 * Math.cos(t) -
-    5 * Math.cos(2 * t) -
-    2 * Math.cos(3 * t) -
-    Math.cos(4 * t)
-  );
-}
-
-function getHeartPoints(count: number, cx: number, cy: number, scale: number) {
-  const points: { x: number; y: number }[] = [];
-  for (let i = 0; i < count; i++) {
-    const t = (i / count) * Math.PI * 2;
-    points.push({
-      x: cx + heartX(t) * scale,
-      y: cy + heartY(t) * scale,
-    });
-  }
-  return points;
-}
-
-const PARTICLE_COLORS = [
-  "rgba(255, 182, 193, alpha)",
-  "rgba(255, 160, 170, alpha)",
-  "rgba(255, 200, 210, alpha)",
-  "rgba(220, 120, 140, alpha)",
-  "rgba(255, 255, 255, alpha)",
-  "rgba(230, 180, 190, alpha)",
-  "rgba(200, 100, 120, alpha)",
-];
-
-function randomColor(opacity: number) {
-  const template =
-    PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
-  return template.replace("alpha", String(opacity));
-}
-
+// ── Main component ─────────────────────────────────────────────────────────
 export default function HeartCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const brightenRef = useRef(false);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+    let raf: number;
 
-    let animFrameId: number;
-    let phase: "gathering" | "beating" = "gathering";
-    let startTime = performance.now();
-
-    const PARTICLE_COUNT = 1800;
-    const DRIFT_GROUP_SIZE = 80;
+    const HEART_N = 2200;
+    const STAR_N = 280;
+    const DRIFT_GROUP = 100;
 
     const particles: Particle[] = [];
+    const stars: Star[] = [];
 
+    let appPhase: "gathering" | "beating" = "gathering";
+    let gatherStart = performance.now();
+    let driftCooldown = 0;
+    let beatTime = 0;
+    let globalBrightness = 1; // boosted to ~1.4 on "I'm still here"
+
+    // ── resize & init ──────────────────────────────────────────────────────
     function resize() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      initParticles();
+      buildStars();
+      buildParticles();
+      appPhase = "gathering";
+      gatherStart = performance.now();
+      beatTime = 0;
     }
 
-    function initParticles() {
-      particles.length = 0;
-      const cx = canvas.width / 2;
-      const cy = canvas.height / 2 - 40;
-      const scale = Math.min(canvas.width, canvas.height) * 0.018;
-      const heartPts = getHeartPoints(PARTICLE_COUNT, cx, cy, scale);
-
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const hp = heartPts[i];
-        const startX = Math.random() * canvas.width;
-        const startY = Math.random() * canvas.height;
-        const size = Math.random() * 2.5 + 0.8;
-        const opacity = Math.random() * 0.6 + 0.3;
-
-        particles.push({
-          x: startX,
-          y: startY,
-          targetX: hp.x,
-          targetY: hp.y,
-          vx: 0,
-          vy: 0,
-          size,
-          opacity,
-          color: randomColor(opacity),
-          phase: "gathering",
-          driftTimer: 0,
-          driftDuration: 0,
-          orbitAngle: Math.random() * Math.PI * 2,
-          orbitRadius: Math.random() * 3,
-          orbitSpeed: (Math.random() * 0.01 + 0.005) * (Math.random() < 0.5 ? 1 : -1),
-          sparkle: Math.random() < 0.15,
-          sparkleTimer: Math.random() * 100,
+    function buildStars() {
+      stars.length = 0;
+      for (let i = 0; i < STAR_N; i++) {
+        stars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          size: Math.random() * 1.2 + 0.2,
+          opacity: Math.random() * 0.5 + 0.05,
+          twinkleSpeed: Math.random() * 0.02 + 0.005,
+          twinklePhase: Math.random() * Math.PI * 2,
         });
       }
-      phase = "gathering";
-      startTime = performance.now();
     }
 
-    let beatT = 0;
-    let driftGroupTimer = 0;
-
-    function tick(now: number) {
-      const elapsed = now - startTime;
+    function buildParticles() {
+      particles.length = 0;
       const cx = canvas.width / 2;
-      const cy = canvas.height / 2 - 40;
-      const scale = Math.min(canvas.width, canvas.height) * 0.018;
+      const cy = canvas.height * 0.46;
+      const scale = Math.min(canvas.width, canvas.height) * 0.0165;
+      const heartPts = getHeartPoints(HEART_N, cx, cy, scale);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < HEART_N; i++) {
+        const hp = heartPts[i];
+        const hue = 28 + Math.random() * 40; // warm gold 28-68°
+        const size = Math.random() * 1.8 + 0.5;
+        const baseOpacity = Math.random() * 0.55 + 0.3;
+        particles.push({
+          x: (Math.random() - 0.5) * canvas.width * 1.6 + cx,
+          y: (Math.random() - 0.5) * canvas.height * 1.6 + cy,
+          tx: hp.x, ty: hp.y,
+          baseTx: hp.x, baseTy: hp.y,
+          vx: 0, vy: 0,
+          size,
+          baseOpacity,
+          opacity: 0,
+          hue,
+          gathered: false,
+          drifting: false,
+          driftTimer: 0,
+          driftMax: 0,
+          driftVx: 0, driftVy: 0,
+          orbitAngle: Math.random() * Math.PI * 2,
+          orbitR: Math.random() * 2.5 + 0.5,
+          orbitSpeed: (Math.random() * 0.008 + 0.003) * (Math.random() < 0.5 ? 1 : -1),
+        });
+      }
+    }
 
-      const grad = ctx.createRadialGradient(cx, cy - 60, 0, cx, cy, canvas.height * 0.7);
-      grad.addColorStop(0, "#ffe0e8");
-      grad.addColorStop(0.5, "#fbc8d4");
-      grad.addColorStop(1, "#e8a0b0");
-      ctx.fillStyle = grad;
+    // ── draw background ────────────────────────────────────────────────────
+    function drawBackground(now: number) {
+      // Deep dark gradient
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const bg = ctx.createRadialGradient(cx, cy * 0.85, 0, cx, cy, Math.max(canvas.width, canvas.height) * 0.8);
+      bg.addColorStop(0, "#0d1525");
+      bg.addColorStop(0.45, "#070B14");
+      bg.addColorStop(1, "#020408");
+      ctx.fillStyle = bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      if (phase === "gathering") {
-        let allArrived = true;
+      // Stars
+      for (const s of stars) {
+        s.twinklePhase += s.twinkleSpeed;
+        const alpha = s.opacity * (0.5 + 0.5 * Math.sin(s.twinklePhase));
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(200,220,255,${alpha})`;
+        ctx.fill();
+      }
+    }
+
+    // ── draw single glowing particle ───────────────────────────────────────
+    function drawParticle(x: number, y: number, size: number, opacity: number, hue: number) {
+      const bright = globalBrightness;
+      const r = Math.round(255 * bright);
+      const g = Math.round((180 + hue * 0.5) * bright);
+      const b = Math.round((80 + hue * 0.8) * Math.min(bright, 1.0));
+      const clamp = (v: number) => Math.min(255, Math.max(0, v));
+
+      // Outer soft halo
+      const halo = ctx.createRadialGradient(x, y, 0, x, y, size * 6);
+      halo.addColorStop(0, `rgba(${clamp(r)},${clamp(g)},${clamp(b)},${opacity * 0.25})`);
+      halo.addColorStop(1, `rgba(${clamp(r)},${clamp(g)},${clamp(b)},0)`);
+      ctx.beginPath();
+      ctx.arc(x, y, size * 6, 0, Math.PI * 2);
+      ctx.fillStyle = halo;
+      ctx.fill();
+
+      // Inner glow
+      const inner = ctx.createRadialGradient(x, y, 0, x, y, size * 2.2);
+      inner.addColorStop(0, `rgba(255,240,200,${Math.min(opacity * 1.4, 1)})`);
+      inner.addColorStop(0.4, `rgba(${clamp(r)},${clamp(g)},${clamp(b)},${opacity * 0.8})`);
+      inner.addColorStop(1, `rgba(${clamp(r)},${clamp(g)},${clamp(b)},0)`);
+      ctx.beginPath();
+      ctx.arc(x, y, size * 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = inner;
+      ctx.fill();
+
+      // Core dot
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,248,220,${Math.min(opacity * 1.6, 1)})`;
+      ctx.fill();
+    }
+
+    // ── heartbeat pulse ────────────────────────────────────────────────────
+    function getPulse(t: number): number {
+      // Realistic heartbeat: two bumps (systole + dicrotic notch), ~60 bpm
+      const period = 120; // frames at 60fps ≈ 1 beat/2s for dramatic feel
+      const phase = (t % period) / period;
+      // first bump
+      const b1 = Math.exp(-Math.pow((phase - 0.12) / 0.05, 2)) * 0.08;
+      // second smaller bump
+      const b2 = Math.exp(-Math.pow((phase - 0.22) / 0.04, 2)) * 0.045;
+      return 1 + b1 + b2;
+    }
+
+    // ── main render loop ───────────────────────────────────────────────────
+    function tick(now: number) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBackground(now);
+
+      const cx = canvas.width / 2;
+      const cy = canvas.height * 0.46;
+      const scale = Math.min(canvas.width, canvas.height) * 0.0165;
+
+      // smooth globalBrightness toward target
+      const targetBrightness = brightenRef.current ? 1.55 : 1.0;
+      globalBrightness += (targetBrightness - globalBrightness) * 0.008;
+
+      if (appPhase === "gathering") {
+        // ── phase 1: particles fly toward heart ──
+        let allIn = true;
+        const elapsed = (now - gatherStart) / 1000;
+
         for (const p of particles) {
-          const dx = p.targetX - p.x;
-          const dy = p.targetY - p.y;
+          const dx = p.baseTx - p.x;
+          const dy = p.baseTy - p.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > 1.5) {
-            allArrived = false;
-            p.vx += dx * 0.03;
-            p.vy += dy * 0.03;
-            p.vx *= 0.88;
-            p.vy *= 0.88;
-            p.x += p.vx;
-            p.y += p.vy;
+
+          if (dist > 2) {
+            allIn = false;
+            // delayed start based on initial distance for staggered feel
+            const delay = Math.sqrt(dx * dx + dy * dy) * 0.0008;
+            if (elapsed > delay) {
+              p.vx += dx * 0.018;
+              p.vy += dy * 0.018;
+              p.vx *= 0.9;
+              p.vy *= 0.9;
+              p.x += p.vx;
+              p.y += p.vy;
+            }
+            // fade in as they approach
+            p.opacity = Math.min(p.baseOpacity, p.opacity + 0.008);
           } else {
-            p.x = p.targetX;
-            p.y = p.targetY;
+            p.x = p.baseTx;
+            p.y = p.baseTy;
+            p.gathered = true;
+            p.opacity = p.baseOpacity;
           }
-          const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
-          glow.addColorStop(0, randomColor(p.opacity));
-          glow.addColorStop(1, randomColor(0));
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = glow;
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = randomColor(p.opacity);
-          ctx.fill();
+
+          drawParticle(p.x, p.y, p.size, p.opacity, p.hue);
         }
 
-        if (allArrived && elapsed > 800) {
-          phase = "beating";
-          startTime = now;
+        if (allIn && elapsed > 1.5) {
+          appPhase = "beating";
+          beatTime = 0;
         }
       } else {
-        beatT += 0.04;
-        const heartPts = getHeartPoints(PARTICLE_COUNT, cx, cy, scale);
+        // ── phase 2: beating heart ──
+        beatTime++;
+        const pulse = getPulse(beatTime);
+        const heartPts = getHeartPoints(HEART_N, cx, cy, scale * pulse);
 
-        const beatPulse = 1 + 0.05 * Math.max(0, Math.sin(beatT * 2)) * (Math.sin(beatT * 2) > 0 ? 1 : 0);
+        // update targets with pulse
+        for (let i = 0; i < HEART_N; i++) {
+          particles[i].tx = heartPts[i].x;
+          particles[i].ty = heartPts[i].y;
+        }
 
-        driftGroupTimer++;
-        if (driftGroupTimer > 180 + Math.random() * 120) {
-          driftGroupTimer = 0;
-          const startIdx = Math.floor(Math.random() * (PARTICLE_COUNT - DRIFT_GROUP_SIZE));
-          for (let i = startIdx; i < startIdx + DRIFT_GROUP_SIZE; i++) {
-            if (particles[i].phase === "formed") {
-              particles[i].phase = "drifting";
-              particles[i].driftDuration = 80 + Math.random() * 60;
-              particles[i].driftTimer = 0;
-              particles[i].vx = (Math.random() - 0.5) * 3;
-              particles[i].vy = (Math.random() - 0.5) * 3 - 0.5;
+        // periodic drift groups
+        driftCooldown--;
+        if (driftCooldown <= 0) {
+          driftCooldown = 200 + Math.random() * 160;
+          const start = Math.floor(Math.random() * (HEART_N - DRIFT_GROUP));
+          for (let i = start; i < start + DRIFT_GROUP; i++) {
+            const p = particles[i];
+            if (!p.drifting) {
+              p.drifting = true;
+              p.driftTimer = 0;
+              p.driftMax = 90 + Math.random() * 70;
+              const angle = Math.random() * Math.PI * 2;
+              const speed = Math.random() * 2 + 0.8;
+              p.driftVx = Math.cos(angle) * speed;
+              p.driftVy = Math.sin(angle) * speed - 0.4;
             }
           }
         }
 
-        for (let i = 0; i < particles.length; i++) {
-          const p = particles[i];
-          const hp = heartPts[i];
+        // ambient float particles (distant specks orbiting far outside)
+        const orbitScale = scale * 17;
+        const ambientCount = 55;
+        for (let i = 0; i < ambientCount; i++) {
+          const ang = (i / ambientCount) * Math.PI * 2 + beatTime * 0.0006;
+          const r = orbitScale + Math.sin(beatTime * 0.003 + i * 0.7) * scale * 3;
+          const ax = cx + Math.cos(ang) * r;
+          const ay = cy + Math.sin(ang) * r * 0.75 - scale * 1.5;
+          const ao = 0.08 + 0.07 * Math.sin(beatTime * 0.015 + i * 0.4);
+          drawParticle(ax, ay, 0.6, ao, 40);
+        }
 
-          const tx = hp.x + (beatPulse - 1) * (hp.x - cx);
-          const ty = hp.y + (beatPulse - 1) * (hp.y - cy);
+        // rising sparkles
+        const sparkleCount = 12;
+        for (let i = 0; i < sparkleCount; i++) {
+          const seed = (beatTime * 0.3 + i * 97.3) % 1000;
+          const sx = cx + (((seed * 7.3) % 1) - 0.5) * scale * 28;
+          const sy = cy - scale * 8 - ((beatTime * 0.4 + i * 60) % (scale * 18));
+          const so = Math.max(0, 0.25 - ((beatTime * 0.4 + i * 60) % (scale * 18)) / (scale * 18) * 0.25);
+          drawParticle(sx, sy, 0.7, so * globalBrightness, 35 + Math.sin(seed) * 15);
+        }
 
-          p.sparkleTimer++;
-          const sparkleOpacity =
-            p.sparkle ? p.opacity * (0.6 + 0.4 * Math.sin(p.sparkleTimer * 0.1)) : p.opacity;
-
-          if (p.phase === "drifting") {
+        // update & draw each heart particle
+        for (const p of particles) {
+          if (p.drifting) {
             p.driftTimer++;
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vx *= 0.97;
-            p.vy *= 0.97;
-
-            if (p.driftTimer > p.driftDuration) {
-              p.phase = "returning";
-            }
-          } else if (p.phase === "returning") {
-            const dx = tx - p.x;
-            const dy = ty - p.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            p.vx += dx * 0.04;
-            p.vy += dy * 0.04;
-            p.vx *= 0.85;
-            p.vy *= 0.85;
-            p.x += p.vx;
-            p.y += p.vy;
-            if (dist < 2) {
-              p.phase = "formed";
-              p.x = tx;
-              p.y = ty;
+            if (p.driftTimer < p.driftMax * 0.4) {
+              // drift outward
+              p.x += p.driftVx;
+              p.y += p.driftVy;
+              p.driftVx *= 0.96;
+              p.driftVy *= 0.96;
+            } else if (p.driftTimer < p.driftMax) {
+              // return home
+              const dx = p.tx - p.x;
+              const dy = p.ty - p.y;
+              p.vx += dx * 0.035;
+              p.vy += dy * 0.035;
+              p.vx *= 0.88;
+              p.vy *= 0.88;
+              p.x += p.vx;
+              p.y += p.vy;
+            } else {
+              p.drifting = false;
+              p.x = p.tx;
+              p.y = p.ty;
+              p.vx = 0;
+              p.vy = 0;
             }
           } else {
-            p.phase = "formed";
+            // gentle micro-orbit at heart target
             p.orbitAngle += p.orbitSpeed;
-            p.x = tx + Math.cos(p.orbitAngle) * p.orbitRadius;
-            p.y = ty + Math.sin(p.orbitAngle) * p.orbitRadius;
+            p.x = p.tx + Math.cos(p.orbitAngle) * p.orbitR;
+            p.y = p.ty + Math.sin(p.orbitAngle) * p.orbitR;
           }
 
-          const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 4);
-          glow.addColorStop(0, randomColor(sparkleOpacity * 0.8));
-          glow.addColorStop(1, randomColor(0));
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
-          ctx.fillStyle = glow;
-          ctx.fill();
+          // breathing opacity
+          p.opacity = p.baseOpacity * (0.8 + 0.2 * Math.sin(beatTime * 0.04 + p.orbitAngle));
 
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = randomColor(sparkleOpacity);
-          ctx.fill();
+          drawParticle(p.x, p.y, p.size, p.opacity * globalBrightness, p.hue);
         }
 
-        const driftedCount = Math.floor(
-          60 + 20 * Math.abs(Math.sin(now * 0.0003))
-        );
-        for (let i = 0; i < driftedCount; i++) {
-          const angle = (i / driftedCount) * Math.PI * 2;
-          const orbitR = (Math.min(canvas.width, canvas.height) * 0.018 * 18) + Math.sin(now * 0.001 + i) * 10;
-          const ox = cx + Math.cos(angle + now * 0.0004) * orbitR;
-          const oy = cy + Math.sin(angle + now * 0.0004) * orbitR * 0.8 - 10;
-          const size = Math.random() * 1.5 + 0.5;
-          const alpha = 0.3 + 0.3 * Math.sin(now * 0.002 + i * 0.3);
-          const glow2 = ctx.createRadialGradient(ox, oy, 0, ox, oy, size * 4);
-          glow2.addColorStop(0, `rgba(255, 200, 210, ${alpha})`);
-          glow2.addColorStop(1, `rgba(255, 200, 210, 0)`);
-          ctx.beginPath();
-          ctx.arc(ox, oy, size * 3, 0, Math.PI * 2);
-          ctx.fillStyle = glow2;
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(ox, oy, size, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 200, 210, ${alpha})`;
-          ctx.fill();
-        }
+        // center ambient glow of heart
+        const glowSize = scale * 9 * pulse;
+        const heartGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowSize);
+        heartGlow.addColorStop(0, `rgba(255,160,80,${0.04 * globalBrightness})`);
+        heartGlow.addColorStop(0.5, `rgba(255,100,60,${0.025 * globalBrightness})`);
+        heartGlow.addColorStop(1, "rgba(255,80,40,0)");
+        ctx.beginPath();
+        ctx.arc(cx, cy, glowSize, 0, Math.PI * 2);
+        ctx.fillStyle = heartGlow;
+        ctx.fill();
       }
 
-      animFrameId = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick);
     }
 
     resize();
     window.addEventListener("resize", resize);
-    animFrameId = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(animFrameId);
-      window.removeEventListener("resize", resize);
-    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
   }, []);
 
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        position: "fixed",
-        inset: 0,
-        overflow: "hidden",
-        fontFamily: "'Georgia', 'Times New Roman', serif",
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        style={{ position: "absolute", inset: 0, display: "block" }}
-      />
-      <TextOverlay />
-    </div>
-  );
-}
-
-function TextOverlay() {
-  const overlayRef = useRef<HTMLDivElement>(null);
-
+  // ── text sequence ──────────────────────────────────────────────────────
   useEffect(() => {
-    const el = overlayRef.current;
-    if (!el) return;
-
+    const el = overlayRef.current!;
     let cancelled = false;
 
-    async function sleep(ms: number) {
-      return new Promise<void>((resolve) => {
-        const t = setTimeout(resolve, ms);
-        if (cancelled) clearTimeout(t);
-      });
-    }
+    const sleep = (ms: number) =>
+      new Promise<void>((res) => { const t = setTimeout(res, ms); if (cancelled) clearTimeout(t); });
 
-    async function fadeIn(elem: HTMLElement, duration = 1200) {
-      elem.style.opacity = "0";
-      elem.style.display = "block";
-      const start = performance.now();
-      return new Promise<void>((resolve) => {
-        function step(now: number) {
-          if (cancelled) { resolve(); return; }
-          const t = Math.min((now - start) / duration, 1);
-          elem.style.opacity = String(t);
-          if (t < 1) requestAnimationFrame(step);
-          else resolve();
-        }
+    const animate = (elem: HTMLElement, fromOpacity: number, toOpacity: number, ms: number) =>
+      new Promise<void>((res) => {
+        const start = performance.now();
+        const step = (now: number) => {
+          if (cancelled) { res(); return; }
+          const frac = easeInOutCubic(Math.min((now - start) / ms, 1));
+          elem.style.opacity = String(fromOpacity + (toOpacity - fromOpacity) * frac);
+          if (frac < 1) requestAnimationFrame(step); else res();
+        };
         requestAnimationFrame(step);
       });
-    }
 
-    async function fadeOut(elem: HTMLElement, duration = 800) {
-      const start = performance.now();
-      const startOpacity = parseFloat(elem.style.opacity) || 1;
-      return new Promise<void>((resolve) => {
-        function step(now: number) {
-          if (cancelled) { resolve(); return; }
-          const t = Math.min((now - start) / duration, 1);
-          elem.style.opacity = String(startOpacity * (1 - t));
-          if (t < 1) requestAnimationFrame(step);
-          else { elem.style.display = "none"; resolve(); }
-        }
-        requestAnimationFrame(step);
-      });
-    }
+    const makeText = (styles: string) => {
+      const d = document.createElement("div");
+      d.style.cssText = styles;
+      d.style.opacity = "0";
+      el.appendChild(d);
+      return d;
+    };
 
     async function run() {
-      await sleep(3200);
+      // Wait for heart to form
+      await sleep(4200);
 
       for (const msg of MESSAGES) {
-        if (cancelled) break;
-        const div = document.createElement("div");
-        div.textContent = msg.text;
-        div.style.cssText = `
-          display:none;
+        if (cancelled) return;
+        const div = makeText(`
           position:absolute;
           left:50%;
-          top:72%;
+          bottom:16%;
           transform:translateX(-50%);
-          text-align:center;
-          color:rgba(120,40,60,0.92);
-          font-size:clamp(16px,3vw,28px);
+          color:rgba(255,255,255,0.92);
+          font-family:'Cormorant Garamond',Georgia,serif;
+          font-size:clamp(15px,2.8vw,26px);
           font-style:italic;
-          font-weight:400;
-          letter-spacing:0.04em;
-          text-shadow:0 0 24px rgba(255,200,210,0.8), 0 1px 2px rgba(0,0,0,0.08);
-          padding:0 24px;
-          max-width:680px;
-          width:90%;
-          line-height:1.6;
-          pointer-events:none;
+          font-weight:300;
+          letter-spacing:0.08em;
+          text-align:center;
+          text-shadow:0 0 30px rgba(255,200,120,0.4),0 0 60px rgba(255,150,80,0.15);
           white-space:nowrap;
-        `;
-        el.appendChild(div);
-        await fadeIn(div);
+          pointer-events:none;
+          width:max-content;
+          max-width:88vw;
+        `);
+        div.textContent = msg.text;
+
+        if (msg.brighten) brightenRef.current = true;
+        await animate(div, 0, 1, 1400);
         await sleep(msg.pause);
-        await fadeOut(div);
+        await animate(div, 1, 0, 900);
         el.removeChild(div);
-        await sleep(200);
+        await sleep(300);
       }
 
       if (cancelled) return;
 
-      const finalBlock = document.createElement("div");
-      finalBlock.style.cssText = `
-        display:none;
+      // Final scene
+      const finalWrap = makeText(`
         position:absolute;
         left:50%;
-        top:60%;
+        bottom:10%;
         transform:translateX(-50%);
         text-align:center;
         pointer-events:none;
-        width:90%;
-        max-width:700px;
-      `;
+        width:90vw;
+        max-width:640px;
+      `);
 
-      const title = document.createElement("div");
-      title.textContent = FINAL_TITLE;
-      title.style.cssText = `
-        color:rgba(180,40,70,0.96);
-        font-size:clamp(22px,4.5vw,48px);
+      const titleEl = document.createElement("div");
+      titleEl.textContent = FINAL_TITLE;
+      titleEl.style.cssText = `
+        font-family:'Cormorant Garamond',Georgia,serif;
+        font-size:clamp(22px,4vw,44px);
+        font-weight:400;
         font-style:italic;
-        font-weight:700;
-        letter-spacing:0.03em;
-        text-shadow:0 0 32px rgba(255,150,170,0.9), 0 0 60px rgba(255,100,130,0.4);
-        margin-bottom:24px;
+        letter-spacing:0.06em;
+        color:rgba(255,255,255,0.97);
+        text-shadow:0 0 40px rgba(255,180,100,0.6),0 0 80px rgba(255,120,60,0.25);
+        margin-bottom:28px;
         line-height:1.3;
       `;
 
-      const sub = document.createElement("div");
-      sub.style.cssText = `
-        color:rgba(110,35,55,0.88);
-        font-size:clamp(13px,2.2vw,20px);
-        font-style:italic;
-        font-weight:400;
-        letter-spacing:0.03em;
-        line-height:1.9;
-        text-shadow:0 0 18px rgba(255,200,210,0.7);
+      const bodyEl = document.createElement("div");
+      bodyEl.textContent = FINAL_BODY;
+      bodyEl.style.cssText = `
+        font-family:'Inter',system-ui,sans-serif;
+        font-size:clamp(12px,1.8vw,17px);
+        font-weight:300;
+        letter-spacing:0.05em;
+        color:rgba(255,255,255,0.62);
+        text-shadow:0 0 20px rgba(255,180,100,0.2);
+        line-height:2;
         white-space:pre-line;
       `;
-      sub.textContent = FINAL_SUBTITLE;
 
-      finalBlock.appendChild(title);
-      finalBlock.appendChild(sub);
-      el.appendChild(finalBlock);
+      finalWrap.appendChild(titleEl);
+      finalWrap.appendChild(bodyEl);
 
-      await fadeIn(finalBlock, 2000);
+      await animate(finalWrap, 0, 1, 2400);
     }
 
     run();
@@ -463,9 +492,15 @@ function TextOverlay() {
   }, []);
 
   return (
-    <div
-      ref={overlayRef}
-      style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-    />
+    <div style={{ position: "fixed", inset: 0, overflow: "hidden" }}>
+      <canvas
+        ref={canvasRef}
+        style={{ position: "absolute", inset: 0, display: "block" }}
+      />
+      <div
+        ref={overlayRef}
+        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+      />
+    </div>
   );
 }

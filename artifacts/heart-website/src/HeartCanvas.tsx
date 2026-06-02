@@ -14,7 +14,7 @@ function getHeartPoints(n: number, cx: number, cy: number, scale: number) {
   return pts;
 }
 
-// ── Easing ───────────────────────────────────────────────────────────────
+// ── Easing ─────────────────────────────────────────────────────────────[...]
 function easeInOutCubic(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
@@ -160,7 +160,7 @@ function sampleTextPixels(
   return grid;
 }
 
-// ── Component ────────────────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────────…[...]
 export default function HeartCanvas() {
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const overlayRef   = useRef<HTMLDivElement>(null);
@@ -780,8 +780,8 @@ export default function HeartCanvas() {
           // Mobile uses snappier springs so particles feel responsive on slower devices
           const eggFormK  = isMobile ? 0.008 : 0.004;
           const eggFormD  = isMobile ? 0.88  : 0.92;
-          const eggRetK   = isMobile ? 0.010 : 0.005;
-          const eggRetD   = isMobile ? 0.86  : 0.90;
+          const eggRetK   = isMobile ? 0.016 : 0.005;  // Increased from 0.010 for faster return
+          const eggRetD   = isMobile ? 0.84  : 0.90;   // Decreased from 0.86 for snappier feel
           if (eggPhaseRef.current === "dissolving") {
             // Return to heart
             [p.x, p.vx] = springStep(p.x, p.vx, p.tx, eggRetK, eggRetD);

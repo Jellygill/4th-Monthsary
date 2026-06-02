@@ -212,6 +212,8 @@ export default function HeartCanvas() {
         sctx.arc(center, center, SPRITE_SIZE * 0.05, 0, Math.PI * 2);
         sctx.fillStyle = "rgba(255,242,246,1.0)";
         sctx.fill();
+        // Save the exact rose color on the canvas for drawing text dots later
+        (sCanvas as any).coreColor = `rgba(${col.r},${col.g},${col.b},1.0)`;
         sprites.push(sCanvas);
       }
     }
@@ -382,13 +384,13 @@ export default function HeartCanvas() {
     }
 
     // ── draw a crisp solid dot for easter-egg text particles ─────────────────
-    function drawTextDot(x: number, y: number, opacity: number) {
+    function drawTextDot(x: number, y: number, opacity: number, sprite?: HTMLCanvasElement) {
       const a = Math.min(1, Math.max(0, opacity));
       if (a < 0.02) return;
       ctx.globalAlpha = a;
       ctx.beginPath();
       ctx.arc(x, y, 1.15, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffcce0";
+      ctx.fillStyle = (sprite as any)?.coreColor || "#ffcce0";
       ctx.fill();
       ctx.globalAlpha = 1.0;
     }
@@ -782,8 +784,8 @@ export default function HeartCanvas() {
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
 
         if (p.state === "easter_egg") {
-          // Crisp solid dot for maximum readability
-          drawTextDot(p.x, p.y, Math.min(1, p.baseOpacity * 4.2 * globalBrightness));
+          // Crisp solid dot using the original heart particle's color
+          drawTextDot(p.x, p.y, Math.min(1, p.baseOpacity * 4.2 * globalBrightness), p.sprite);
         } else {
           drawParticle(p.x, p.y, p.size, op, p.sprite);
         }

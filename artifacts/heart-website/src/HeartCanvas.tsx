@@ -110,8 +110,8 @@ function sampleTextPixels(
   const isLongPhrase = text.length >= 28;
   const isVeryLongPhrase = text.length >= 40;
   // Longer phrases need more sampled stroke points to keep letters readable.
-  const alphaThreshold = isVeryLongPhrase ? 42 : (isLongPhrase ? 55 : 80);
-  const extraCopies = isVeryLongPhrase ? 3 : (isLongPhrase ? 2 : 1);
+  const alphaThreshold = isVeryLongPhrase ? 50 : (isLongPhrase ? 58 : 80);
+  const extraCopies = isVeryLongPhrase ? 2 : (isLongPhrase ? 2 : 1);
   for (let y = 0; y < H; y += step) {
     for (let x = 0; x < W; x += step) {
       if (data[(y * W + x) * 4] > alphaThreshold) {
@@ -157,7 +157,7 @@ export default function HeartCanvas() {
     let raf: number;
 
     const isMobile      = window.innerWidth < 768;
-    const HEART_N       = isMobile ? 1800 : 3000;
+    const HEART_N       = isMobile ? 1500 : 2400;
     const STAR_N        = isMobile ? 150 : 300;
     // Repulsion parameters — wider breeze area, gentle force, plus cursor dragging!
     const REPULSE_R     = 165;   // noticeably wider interaction breeze (flowing water splash)
@@ -184,8 +184,8 @@ export default function HeartCanvas() {
     let prevMx = -9999;
     let prevMy = -9999;
 
-    // Allow most particles to be available for text so long phrases stay readable.
-    const EGG_N = Math.min(2400, Math.floor(HEART_N * 0.8));
+    // Keep enough particles in the heart so the shape never looks cut in half.
+    const EGG_N = Math.min(1200, Math.floor(HEART_N * 0.42));
 
     // ── waitForBeat ────────────────────────────────────────────────────
     waitForBeatRef.current = () =>
@@ -226,6 +226,7 @@ export default function HeartCanvas() {
 
     const orbitSprite = document.createElement("canvas");
     const sparkleSprite = document.createElement("canvas");
+    const textSprite = document.createElement("canvas");
 
     function buildSpecialSprites() {
       const size = SPRITE_SIZE;
@@ -265,6 +266,27 @@ export default function HeartCanvas() {
       sctx.arc(center, center, size * 0.05, 0, Math.PI * 2);
       sctx.fillStyle = "rgba(255,242,246,1.0)";
       sctx.fill();
+
+      // Text sprite (crisp pink) for easter egg lettering, optimized for performance.
+      textSprite.width = size;
+      textSprite.height = size;
+      const tctx = textSprite.getContext("2d")!;
+      const tHalo = tctx.createRadialGradient(center, center, 0, center, center, radius);
+      tHalo.addColorStop(0,   "rgba(255,140,190,0.28)");
+      tHalo.addColorStop(0.55,"rgba(255,96,164,0.12)");
+      tHalo.addColorStop(1,   "rgba(255,96,164,0)");
+      tctx.beginPath();
+      tctx.arc(center, center, radius, 0, Math.PI * 2);
+      tctx.fillStyle = tHalo;
+      tctx.fill();
+      tctx.beginPath();
+      tctx.arc(center, center, size * 0.07, 0, Math.PI * 2);
+      tctx.fillStyle = "rgba(255,160,206,0.98)";
+      tctx.fill();
+      tctx.beginPath();
+      tctx.arc(center, center, size * 0.03, 0, Math.PI * 2);
+      tctx.fillStyle = "rgba(255,226,239,0.95)";
+      tctx.fill();
     }
 
     // Build the high-performance sprites once on mount
@@ -375,35 +397,6 @@ export default function HeartCanvas() {
       ctx.globalAlpha = 1.0;
     }
 
-    // Sharper particle for text readability (used by easter egg lettering)
-    function drawTextParticle(x: number, y: number, size: number, opacity: number) {
-      const a = Math.min(1, Math.max(0, opacity));
-      if (a < 0.02) return;
-      const r = Math.max(0.65, size * 0.95);
-
-      ctx.globalAlpha = a;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,168,204,0.96)";
-      ctx.fill();
-
-      // Pink glow keeps readability while preserving crisp edges.
-      ctx.shadowBlur = 4;
-      ctx.shadowColor = "rgba(255,90,155,0.65)";
-      ctx.beginPath();
-      ctx.arc(x, y, r * 0.72, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,112,176,0.96)";
-      ctx.fill();
-
-      // Small bright center boosts legibility on dark backgrounds.
-      ctx.beginPath();
-      ctx.arc(x, y, r * 0.28, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,222,236,0.92)";
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1.0;
-    }
-
     // ── heartbeat pulse ─────────────────────────────────────────────────
     function getRawPulse(t: number): number {
       const phase = (t % BEAT_PERIOD) / BEAT_PERIOD;
@@ -494,7 +487,7 @@ export default function HeartCanvas() {
       ];
       const msg = messages[eggClickCountRef.current % messages.length];
 
-      // Use all available settled particles so long phrases have enough dots to stay readable.
+      // Use only a controlled subset so the heart remains intact while text stays readable.
       const candidates = particles.filter(p => p.state === "formed");
 
       eggClickCountRef.current += 1;
@@ -787,10 +780,10 @@ export default function HeartCanvas() {
         const displacedDim = (p.state === "scattered") ? 0.82 : 1.0;
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
         // Easter-egg particles render tight and bright to keep letterforms crisp
-        const drawSize = p.state === "easter_egg" ? p.size * 0.9 : p.size;
+        const drawSize = p.state === "easter_egg" ? p.size * 0.7 : p.size;
         const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.9, 1) : op;
         if (p.state === "easter_egg") {
-          drawTextParticle(p.x, p.y, drawSize, drawOp);
+          drawParticle(p.x, p.y, drawSize, drawOp, textSprite);
         } else {
           drawParticle(p.x, p.y, drawSize, drawOp, p.sprite);
         }

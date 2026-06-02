@@ -29,6 +29,12 @@ function springStep(
   return [pos + newVel, newVel];
 }
 
+// ── Smoothstep easing ─────────────────────────────────────────────────────
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 // ── Rose-pink color ──────────────────────────────────────────────────────
 function roseColor() {
   const v = Math.random();
@@ -54,6 +60,9 @@ interface Particle {
   driftAwayTimer: number; driftAwayMax: number;
   orbitAngle: number; orbitR: number; orbitSpeed: number;
   twinkle: number; twinkleSpeed: number;
+  // Per-particle spring personality for organic recovery
+  returnStiffness: number;  // varied per particle so they don't all snap back at once
+  returnDamping: number;    // slight damping variety produces gentle overshoot differences
 }
 
 interface Star { x: number; y: number; size: number; opacity: number; phase: number; speed: number; }
@@ -137,9 +146,10 @@ export default function HeartCanvas() {
 
     const HEART_N       = 3000;
     const STAR_N        = 300;
-    const ATTRACT_R     = 145;   // radius of the magnetic field
-    const ATTRACT_F     = 0.82;  // very gentle pull force
-    const ATTRACT_DEAD  = 26;    // dead-zone — no force closer than this to cursor
+    // Repulsion parameters — gentle breeze, not an explosion
+    const REPULSE_R     = 80;    // small radius: only nearby particles are nudged
+    const REPULSE_F     = 0.38;  // soft force — a whisper, not a push
+    const REPULSE_DEAD  = 8;     // tiny dead-zone at cursor centre
     const BEAT_PERIOD   = 130;      // frames per heartbeat cycle
     const BEAT_PEAK_PH  = 0.10;    // normalised phase where first bump peaks
 
@@ -152,8 +162,10 @@ export default function HeartCanvas() {
     let beatPulse    = 1.0;
     let driftCooldown = 280;
     let globalBrightness = 1.0;
-    let pulseStrength    = 1.0;   // 0.4–1.0; reduced when heart is disturbed
+    let pulseStrength    = 1.0;   // weakens when disturbed, recovers organically
     let prevPhase        = 0;     // to detect beat peak crossing
+    // Track how many particles are currently displaced (0–1 normalised)
+    let displacedFraction = 0.0;  // rises as particles scatter, falls as they return
 
     // Egg particles: first ~500 particles are commandeered for easter egg
     const EGG_N = 1400;
@@ -199,6 +211,9 @@ export default function HeartCanvas() {
         const col = roseColor();
         const sx  = (Math.random() - 0.5) * canvas.width  * 1.8 + cx;
         const sy  = (Math.random() - 0.5) * canvas.height * 1.8 + cy;
+        // Each particle gets its own spring personality so recovery is organic
+        const returnStiffness = 0.028 + Math.random() * 0.032; // 0.028–0.060
+        const returnDamping   = 0.70  + Math.random() * 0.10;  // 0.70–0.80 (allows gentle overshoot)
         particles.push({
           x: sx, y: sy, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4,
           baseTx: hp.x, baseTy: hp.y,
@@ -218,6 +233,8 @@ export default function HeartCanvas() {
           orbitSpeed: (Math.random() * 0.007 + 0.002) * (Math.random() < 0.5 ? 1 : -1),
           twinkle: Math.random() * Math.PI * 2,
           twinkleSpeed: Math.random() * 0.06 + 0.02,
+          returnStiffness,
+          returnDamping,
         });
       }
     }
@@ -277,9 +294,11 @@ export default function HeartCanvas() {
 
     // ── heart ambient glow ───────────────────────────────────────────────
     function drawHeartGlow(cx: number, cy: number, scale: number) {
-      // Glow is warmer and stronger in final state, dimmer when disturbed
+      // Glow softens as the heart is disturbed, rebuilds as particles return
+      // displacedFraction (0–1) drives the softening: higher = more disturbed
+      const disturbSoften = 1 - displacedFraction * 0.42;  // at peak disturbance glow is ~58% normal
       const baseAlpha = finalStateRef.current ? 0.09 : 0.06;
-      const alpha = baseAlpha * globalBrightness * (1 + disturbanceRef.current * 0.55) * beatPulse;
+      const alpha = baseAlpha * globalBrightness * disturbSoften * beatPulse;
       const radius = scale * (finalStateRef.current ? 13 : 11) * beatPulse;
       const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
       g.addColorStop(0, `rgba(230,70,110,${alpha})`);
@@ -357,8 +376,7 @@ export default function HeartCanvas() {
       const scale = Math.min(canvas.width, canvas.height) * 0.0165;
       const mx    = mouseRef.current.x;
       const my    = mouseRef.current.y;
-      const ar       = ATTRACT_R * ATTRACT_R;
-      const ar_dead2 = ATTRACT_DEAD * ATTRACT_DEAD;
+      const onCanvas = mx > 0 && mx < canvas.width && my > 0 && my < canvas.height;
 
       // ── Gathering phase ──────────────────────────────────────────────
       if (appPhase === "gathering") {
@@ -414,23 +432,34 @@ export default function HeartCanvas() {
       }
       prevPhase = curPhase;
 
-      // ── Magnetic factor: cursor proximity to the heart ───────────────
-      // Rises to 1 when cursor is at heart centre; 0 when off-screen or far away
-      const onCanvas = mx > 0 && mx < canvas.width && my > 0 && my < canvas.height;
+      // ── Track displaced fraction to drive emotional feedback ────────
+      // Count how many particles are not in "formed" state (normalised 0–1)
+      let displacedCount = 0;
+      for (const p of particles) {
+        if (p.state === "scattered" || p.state === "drifting_away") displacedCount++;
+      }
+      const targetDisplacedFraction = displacedCount / HEART_N;
+      // Slow, organic transition — rises quickly on disturbance, fades slowly on recovery
+      const dfRate = targetDisplacedFraction > displacedFraction ? 0.08 : 0.018;
+      displacedFraction += (targetDisplacedFraction - displacedFraction) * dfRate;
+
+      // ── Disturbance signal for legacy refs ───────────────────────────
       const hdx = mx - cx, hdy = my - cy;
       const heartDist = Math.sqrt(hdx * hdx + hdy * hdy);
-      const rawMagnetic = onCanvas ? Math.max(0, 1 - heartDist / (scale * 22)) : 0;
-      disturbanceRef.current += (rawMagnetic - disturbanceRef.current) * 0.035;
-      const d = disturbanceRef.current;
+      const rawProximity = onCanvas ? Math.max(0, 1 - heartDist / (scale * 22)) : 0;
+      disturbanceRef.current += (rawProximity - disturbanceRef.current) * 0.035;
 
-      // ── Emotional feedback: heart glows and beats stronger when drawn near
-      const targetPulseStrength = 1 + d * 0.18;   // slightly stronger when cursor approaches
-      pulseStrength += (targetPulseStrength - pulseStrength) * 0.025;
+      // ── Heartbeat weakens when disturbed, recovers as particles return ─
+      // pulseStrength dips to 0.55 at full disturbance, never fully disappears
+      const targetPulseStrength = 1.0 - displacedFraction * 0.45;
+      pulseStrength += (Math.max(0.55, targetPulseStrength) - pulseStrength) * 0.022;
 
       const finalBoost = finalStateRef.current ? 0.18 : 0;
       const brightenBoost = brightenRef.current ? 0.6 : 0;
-      const targetBrightness = 1.0 + brightenBoost + finalBoost + d * 0.28;
-      globalBrightness += (Math.max(0.4, targetBrightness) - globalBrightness) * 0.008;
+      // Brightness dims when disturbed, rebuilds as particles return
+      const disturbDim = displacedFraction * 0.30;
+      const targetBrightness = Math.max(0.55, 1.0 + brightenBoost + finalBoost - disturbDim);
+      globalBrightness += (targetBrightness - globalBrightness) * 0.012;
 
       // ── Pulse ────────────────────────────────────────────────────────
       const rawPulse = getRawPulse(beatTime);
@@ -479,26 +508,34 @@ export default function HeartCanvas() {
         }
       }
 
+      // Pre-compute repulsion squared radii
+      const repR2      = REPULSE_R * REPULSE_R;
+      const repDead2   = REPULSE_DEAD * REPULSE_DEAD;
+
       // ── Per-particle update ──────────────────────────────────────────
       for (const p of particles) {
         p.twinkle += p.twinkleSpeed;
         const ta = 0.82 + 0.18 * Math.sin(p.twinkle);
 
-        // Gentle magnetic attraction toward cursor (skip easter-egg particles)
-        if (p.state !== "easter_egg") {
-          const adx = mx - p.x, ady = my - p.y;
-          const ad2 = adx * adx + ady * ady;
-          if (ad2 < ar && ad2 > ar_dead2) {
-            const ad = Math.sqrt(ad2);
-            // Ramp up from dead-zone edge, taper off at radius edge — smooth bell
-            const edgeFade = 1 - ad / ATTRACT_R;
-            const deadRamp = Math.min(1, (ad - ATTRACT_DEAD) / 32);
-            const str = edgeFade * deadRamp * ATTRACT_F;
-            p.vx += (adx / ad) * str;
-            p.vy += (ady / ad) * str;
-            // Soft velocity cap — keeps motion graceful, not frantic
+        // ── Gentle repulsion: cursor pushes nearby particles away ────
+        // Skip easter-egg particles so they keep forming their letters.
+        if (p.state !== "easter_egg" && onCanvas) {
+          const rdx = p.x - mx;   // vector FROM cursor TO particle (repulsion direction)
+          const rdy = p.y - my;
+          const rd2 = rdx * rdx + rdy * rdy;
+
+          if (rd2 < repR2 && rd2 > repDead2) {
+            const rd = Math.sqrt(rd2);
+            // Force tapers from strong near cursor to zero at radius edge
+            // smoothstep gives a very soft, cinematic falloff
+            const falloff = smoothstep(REPULSE_R, REPULSE_DEAD, rd);  // 0 at edge, 1 near cursor
+            const str = falloff * REPULSE_F;
+            // Apply the nudge outward — soft, like a gentle breath
+            p.vx += (rdx / rd) * str;
+            p.vy += (rdy / rd) * str;
+            // Soft velocity cap: the heart is shaken, not shattered
             const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-            if (spd > 2.6) { p.vx = (p.vx / spd) * 2.6; p.vy = (p.vy / spd) * 2.6; }
+            if (spd > 1.8) { p.vx = (p.vx / spd) * 1.8; p.vy = (p.vy / spd) * 1.8; }
             if (p.state === "formed") p.state = "scattered";
           }
         }
@@ -520,7 +557,7 @@ export default function HeartCanvas() {
           }
 
         } else if (p.state === "formed") {
-          // Micro-orbit
+          // Micro-orbit keeps particles alive and breathing
           p.orbitAngle += p.orbitSpeed;
           const ox = p.tx + Math.cos(p.orbitAngle) * p.orbitR;
           const oy = p.ty + Math.sin(p.orbitAngle) * p.orbitR;
@@ -533,29 +570,34 @@ export default function HeartCanvas() {
             p.x += p.vx; p.y += p.vy;
             p.vx *= 0.94; p.vy *= 0.94;
           } else {
-            // Spring return with natural overshoot (damping < 0.85)
-            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.055, 0.73);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.055, 0.73);
+            // Spring return with per-particle personality — varied overshoot, organic timing
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, p.returnStiffness, p.returnDamping);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, p.returnStiffness, p.returnDamping);
             const dx = p.tx - p.x, dy = p.ty - p.y;
             if (dx * dx + dy * dy < 4 && Math.abs(p.vx) < 0.25 && Math.abs(p.vy) < 0.25) {
               p.state = "formed"; p.vx = 0; p.vy = 0;
             }
           }
-          if (p.driftAwayTimer > p.driftAwayMax + 80) {
+          if (p.driftAwayTimer > p.driftAwayMax + 100) {
             p.state = "formed"; p.x = p.tx; p.y = p.ty; p.vx = 0; p.vy = 0;
           }
 
         } else if (p.state === "scattered") {
-          // Spring return from mouse push — lower stiffness for graceful arc
-          [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.038, 0.75);
-          [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.038, 0.75);
+          // Spring return from cursor repulsion — per-particle spring for organic variation
+          // Slightly stiffer than drifting_away so the heart reassembles confidently
+          const ks = p.returnStiffness * 1.15;
+          const kd = p.returnDamping;
+          [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
+          [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
           const dx = p.tx - p.x, dy = p.ty - p.y;
-          if (dx * dx + dy * dy < 6 && Math.abs(p.vx) < 0.22 && Math.abs(p.vy) < 0.22) {
+          if (dx * dx + dy * dy < 5 && Math.abs(p.vx) < 0.20 && Math.abs(p.vy) < 0.20) {
             p.state = "formed"; p.vx = 0; p.vy = 0;
           }
         }
 
-        const op = p.baseOpacity * ta * globalBrightness;
+        // Displaced particles dim very subtly — they're still beautiful, just displaced
+        const displacedDim = (p.state === "scattered") ? 0.82 : 1.0;
+        const op = p.baseOpacity * ta * globalBrightness * displacedDim;
         // Easter-egg particles render tight and bright to keep letterforms crisp
         const drawSize = p.state === "easter_egg" ? p.size * 0.45 : p.size;
         const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.2, 1)   : op;

@@ -517,15 +517,15 @@ export default function HeartCanvas() {
 
     // ── main loop ────────────────────────────────────────────────────────
     function tick() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, width, height);
       drawBackground();
 
-      const cx    = canvas.width / 2;
-      const cy    = canvas.height * 0.46;
-      const scale = Math.min(canvas.width, canvas.height) * 0.0165;
+      const cx    = width / 2;
+      const cy    = height * 0.46;
+      const scale = Math.min(width, height) * 0.0165;
       const mx    = mouseRef.current.x;
       const my    = mouseRef.current.y;
-      const onCanvas = mx > 0 && mx < canvas.width && my > 0 && my < canvas.height;
+      const onCanvas = mx > 0 && mx < width && my > 0 && my < height;
 
       // Calculate and clamp mouse velocity to keep the drag graceful and slow
       let mvx = 0;
@@ -823,9 +823,9 @@ export default function HeartCanvas() {
     function onCanvasClick(e: MouseEvent | TouchEvent) {
       if (appPhase !== "beating") return;
       const rect = canvas.getBoundingClientRect();
-      const cx   = canvas.width / 2;
-      const cy   = canvas.height * 0.46;
-      const scale = Math.min(canvas.width, canvas.height) * 0.0165;
+      const cx   = width / 2;
+      const cy   = height * 0.46;
+      const scale = Math.min(width, height) * 0.0165;
       const hitR  = scale * 18; // generous hit zone around heart
       let px: number, py: number;
       if ("touches" in e) {

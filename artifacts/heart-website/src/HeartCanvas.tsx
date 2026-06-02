@@ -187,8 +187,8 @@ export default function HeartCanvas() {
     let raf: number;
 
     const isMobile      = window.innerWidth < 768;
-    const HEART_N       = isMobile ? 1500 : 2400;
-    const STAR_N        = isMobile ? 150 : 300;
+    const HEART_N       = isMobile ? 1200 : 2400;
+    const STAR_N        = isMobile ? 120 : 300;
     // Repulsion parameters — wider breeze area, gentle force, plus cursor dragging!
     const REPULSE_R     = 165;   // noticeably wider interaction breeze (flowing water splash)
     const REPULSE_F     = 0.26;  // gentler push so interaction feels calm and readable
@@ -777,18 +777,23 @@ export default function HeartCanvas() {
 
         // State machine
         if (p.state === "easter_egg") {
+          // Mobile uses snappier springs so particles feel responsive on slower devices
+          const eggFormK  = isMobile ? 0.008 : 0.004;
+          const eggFormD  = isMobile ? 0.88  : 0.92;
+          const eggRetK   = isMobile ? 0.010 : 0.005;
+          const eggRetD   = isMobile ? 0.86  : 0.90;
           if (eggPhaseRef.current === "dissolving") {
-            // Return to heart ONLY — gentler, slow spring
-            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.005, 0.90);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.005, 0.90);
+            // Return to heart
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, eggRetK, eggRetD);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, eggRetK, eggRetD);
             const dx = p.tx - p.x, dy = p.ty - p.y;
             if (dx * dx + dy * dy < 9 && Math.abs(p.vx) < 0.28 && Math.abs(p.vy) < 0.28) {
               p.state = "formed"; p.vx = 0; p.vy = 0;
             }
           } else {
-            // Spring toward egg text target — slow, dreamy firefly glide
-            [p.x, p.vx] = springStep(p.x, p.vx, p.etx, 0.004, 0.92);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ety, 0.004, 0.92);
+            // Spring toward egg text target
+            [p.x, p.vx] = springStep(p.x, p.vx, p.etx, eggFormK, eggFormD);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ety, eggFormK, eggFormD);
           }
 
         } else if (p.state === "formed") {
@@ -805,9 +810,11 @@ export default function HeartCanvas() {
             p.x += p.vx; p.y += p.vy;
             p.vx *= 0.94; p.vy *= 0.94;
           } else {
-            // Spring return with per-particle personality — slow and dreamy return
-            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, p.returnStiffness * 0.11, p.returnDamping * 1.2);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, p.returnStiffness * 0.11, p.returnDamping * 1.2);
+            // Spring return with per-particle personality
+            const driftMul = isMobile ? 0.18 : 0.11;
+            const driftDmpMul = isMobile ? 1.05 : 1.2;
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, p.returnStiffness * driftMul, p.returnDamping * driftDmpMul);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, p.returnStiffness * driftMul, p.returnDamping * driftDmpMul);
             const dx = p.tx - p.x, dy = p.ty - p.y;
             if (dx * dx + dy * dy < 4 && Math.abs(p.vx) < 0.25 && Math.abs(p.vy) < 0.25) {
               p.state = "formed"; p.vx = 0; p.vy = 0;
@@ -829,8 +836,8 @@ export default function HeartCanvas() {
             [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
             [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
           } else {
-            const ks = p.returnStiffness * 0.11; // dreamy slow drift back
-            const kd = 0.93;
+            const ks = p.returnStiffness * (isMobile ? 0.18 : 0.11);
+            const kd = isMobile ? 0.88 : 0.93;
             [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
             [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
           }

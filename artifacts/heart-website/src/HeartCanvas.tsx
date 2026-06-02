@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ── Heart parametric equation ────────────────────────────────────────────
 function heartX(t: number) { return 16 * Math.pow(Math.sin(t), 3); }
@@ -81,45 +81,55 @@ const FINAL_BODY =
   "There may be a lot of things changing around us right now,\nbut my choice remains the same.\n\nIt will always be you, hon.";
 
 // ── Sample text pixels from an offscreen canvas ──────────────────────────
+// Returns a FIXED-SIZE array of exactly `targetCount` points spread evenly
+// across all detected letter pixels — guaranteeing every character is
+// represented regardless of string length or raw pixel count.
 function sampleTextPixels(
   text: string, canvasW: number, canvasH: number,
-  cx: number, cy: number, _scale: number
+  cx: number, cy: number, _scale: number,
+  targetCount: number
 ): { x: number; y: number }[] {
-  // Use most of the canvas width so long strings never clip
   const W = Math.floor(canvasW * 0.88);
-  // Taller canvas = thicker, more pixel-dense strokes
-  const H = Math.floor(canvasH * 0.20);
+  // Taller canvas = thicker strokes for better particle density
+  const H = Math.floor(canvasH * 0.22);
   const tmp = document.createElement("canvas");
   tmp.width = W; tmp.height = H;
   const c = tmp.getContext("2d")!;
   c.fillStyle = "#000";
   c.fillRect(0, 0, W, H);
   c.fillStyle = "#fff";
-  // Bold weight + generous font size so strokes are thick and pixel-dense
-  let fs = Math.max(20, Math.floor(H * 0.55));
-  c.font = `800 ${fs}px Georgia, serif`;
-  while (c.measureText(text).width > W * 0.92 && fs > 14) {
+  let fs = Math.max(20, Math.floor(H * 0.52));
+  c.font = `900 ${fs}px Arial, sans-serif`;
+  while (c.measureText(text).width > W * 0.90 && fs > 13) {
     fs -= 1;
-    c.font = `800 ${fs}px Georgia, serif`;
+    c.font = `900 ${fs}px Arial, sans-serif`;
   }
   c.textAlign = "center";
   c.textBaseline = "middle";
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
-  const pts: { x: number; y: number }[] = [];
-  // Lower threshold captures anti-aliased edges → denser, crisper letterforms
-  const alphaThreshold = 40;
+  // Collect ALL lit pixels first
+  const all: { x: number; y: number }[] = [];
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      if (data[(y * W + x) * 4] > alphaThreshold) {
-        pts.push({
+      if (data[(y * W + x) * 4] > 30) {
+        all.push({
           x: cx + (x - W / 2),
           y: cy - _scale * 7 + (y - H / 2),
         });
       }
     }
   }
-  return pts;
+  if (all.length === 0) return [];
+  // Sub-sample evenly so we always return exactly targetCount points
+  // spread proportionally across the full character set.
+  const out: { x: number; y: number }[] = [];
+  const use = Math.min(targetCount, all.length);
+  const stride = all.length / use;
+  for (let i = 0; i < use; i++) {
+    out.push(all[Math.floor(i * stride)]);
+  }
+  return out;
 }
 
 // ── Component ────────────────────────────────────────────────────────────
@@ -477,28 +487,22 @@ export default function HeartCanvas() {
         "Tell Sage I said hi"
       ];
       const msg = messages[eggClickCountRef.current % messages.length];
-
-      // Use only a controlled subset so the heart remains intact while text stays readable.
-      const candidates = particles.filter(p => p.state === "formed");
-
       eggClickCountRef.current += 1;
-      const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 11, sc);
+
+      // Ask sampleTextPixels to return exactly EGG_N points spread evenly
+      // across every character — so all letters are covered, short or long.
+      const candidates = particles.filter(p => p.state === "formed");
+      const use = Math.min(EGG_N, candidates.length);
+      const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 11, sc, use);
       if (pts.length === 0) return;
 
-      // Downsample text pixels evenly across the full point set (no random start offset)
-      // so every character region gets proportional coverage — preserving letter shapes.
-      const use = Math.min(EGG_N, candidates.length, pts.length);
-      const stride = pts.length / use;
-
-      // Shuffle candidates so particles come from all over the heart, not just one region.
-      // This avoids a lopsided hole in the heart while the text is forming.
+      // Shuffle candidates so particles come from all over the heart.
       const shuffled = candidates.slice().sort(() => Math.random() - 0.5);
 
-      for (let i = 0; i < use; i++) {
+      for (let i = 0; i < pts.length; i++) {
         const p = shuffled[i];
-        const pick = Math.min(pts.length - 1, Math.floor(i * stride));
-        p.etx = pts[pick].x;
-        p.ety = pts[pick].y;
+        p.etx = pts[i].x;
+        p.ety = pts[i].y;
         p.state = "easter_egg";
         p.vx = 0; p.vy = 0;
       }
@@ -774,11 +778,11 @@ export default function HeartCanvas() {
         // Displaced particles dim very subtly — they're still beautiful, just displaced
         const displacedDim = (p.state === "scattered") ? 0.82 : 1.0;
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
-        // Easter-egg particles render at a fixed uniform size so every letter
-        // gets the same dot density — no giant blobs next to tiny invisible dots.
-        const EASTER_EGG_SIZE = 0.95;
+        // Easter-egg particles: uniform fixed size so dot density is even across all letters.
+        // Smaller size = more precise letterforms with no oversized blobs.
+        const EASTER_EGG_SIZE = 0.75;
         const drawSize = p.state === "easter_egg" ? EASTER_EGG_SIZE : p.size;
-        const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.6, 1) : op;
+        const drawOp   = p.state === "easter_egg" ? Math.min(op * 3.2, 1) : op;
         if (p.state === "easter_egg") {
           drawParticle(p.x, p.y, drawSize, drawOp, textSprite);
         } else {
@@ -985,7 +989,15 @@ export default function HeartCanvas() {
           0%, 100% { opacity: 0.20; transform: translateX(-50%) scale(0.97); }
           50% { opacity: 0.55; transform: translateX(-50%) scale(1.03); }
         }
+        @keyframes musicPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255,110,145,0.0); }
+          50% { box-shadow: 0 0 0 6px rgba(255,110,145,0.18); }
+        }
       `}</style>
+
+      {/* ── Background music ─────────────────────────────────────────────── */}
+      <MusicPlayer />
+
       <canvas
         ref={canvasRef}
         style={{ position: "absolute", inset: 0, display: "block", cursor: "default" }}
@@ -1017,5 +1029,102 @@ export default function HeartCanvas() {
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
       />
     </div>
+  );
+}
+
+// ── Music Player ─────────────────────────────────────────────────────────
+const TRACKS = [
+  { src: "/bruno-mars.mp3",    label: "Bruno Mars" },
+  { src: "/marias.mp3",        label: "The Marías" },
+  { src: "/daniel-caesar.mp3", label: "Daniel Caesar" },
+];
+
+function MusicPlayer() {
+  const audioRef                    = useRef<HTMLAudioElement>(null);
+  const [isPlaying,  setIsPlaying]  = useState(false);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const hasStartedRef               = useRef(false);
+
+  // Auto-start on first user interaction anywhere on the page
+  useEffect(() => {
+    function tryStart() {
+      if (hasStartedRef.current) return;
+      hasStartedRef.current = true;
+      const a = audioRef.current;
+      if (!a) return;
+      a.volume = 0.35;
+      a.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+    window.addEventListener("click",      tryStart, { once: true });
+    window.addEventListener("touchstart", tryStart, { once: true });
+    return () => {
+      window.removeEventListener("click",      tryStart);
+      window.removeEventListener("touchstart", tryStart);
+    };
+  }, []);
+
+  // When track index changes (after a track ends), play the new one
+  useEffect(() => {
+    if (!hasStartedRef.current) return;
+    const a = audioRef.current;
+    if (!a) return;
+    a.load();
+    a.play().then(() => setIsPlaying(true)).catch(() => {});
+  }, [currentIdx]);
+
+  function handleEnded() {
+    setCurrentIdx(prev => (prev + 1) % TRACKS.length);
+  }
+
+  function togglePlay() {
+    const a = audioRef.current;
+    if (!a) return;
+    if (isPlaying) {
+      a.pause();
+      setIsPlaying(false);
+    } else {
+      a.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  }
+
+  return (
+    <>
+      <audio
+        ref={audioRef}
+        src={TRACKS[currentIdx].src}
+        onEnded={handleEnded}
+        preload="auto"
+      />
+      {/* Floating music toggle — top-right corner */}
+      <button
+        onClick={togglePlay}
+        title={isPlaying ? `Now playing: ${TRACKS[currentIdx].label} — click to pause` : "Play music"}
+        style={{
+          position: "absolute",
+          top: "16px",
+          right: "18px",
+          zIndex: 99,
+          background: "rgba(20, 5, 18, 0.75)",
+          border: "1px solid rgba(255,140,175,0.30)",
+          borderRadius: "50%",
+          width: "42px",
+          height: "42px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          backdropFilter: "blur(10px)",
+          animation: isPlaying ? "musicPulse 2s infinite ease-in-out" : "none",
+          transition: "opacity 0.3s, border-color 0.3s",
+          opacity: isPlaying ? 0.85 : 0.55,
+          fontSize: "18px",
+          lineHeight: 1,
+          color: "rgba(255,198,212,0.92)",
+          padding: 0,
+        }}
+      >
+        {isPlaying ? "♫" : "♩"}
+      </button>
+    </>
   );
 }

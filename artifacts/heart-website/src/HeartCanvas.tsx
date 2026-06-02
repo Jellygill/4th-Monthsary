@@ -127,6 +127,7 @@ export default function HeartCanvas() {
   // Easter egg
   const eggPhaseRef      = useRef<"idle" | "forming" | "holding" | "dissolving">("idle");
   const eggTimerRef      = useRef(0);
+  const eggClickCountRef = useRef(0);
 
   // ── Canvas / animation ──────────────────────────────────────────────
   useEffect(() => {
@@ -321,7 +322,10 @@ export default function HeartCanvas() {
       const cx  = canvas.width / 2;
       const cy  = canvas.height * 0.46;
       const sc  = Math.min(canvas.width, canvas.height) * 0.0165;
-      const pts = sampleTextPixels("For Mary Iris ❤️", canvas.width, canvas.height, cx, cy - sc * 5, sc);
+      const messages = ["For Mary Iris ❤️", "I love you hon ❤️"];
+      const msg = messages[eggClickCountRef.current % messages.length];
+      eggClickCountRef.current += 1;
+      const pts = sampleTextPixels(msg, canvas.width, canvas.height, cx, cy - sc * 5, sc);
       if (pts.length === 0) return;
 
       // Assign egg targets to first EGG_N particles

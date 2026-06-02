@@ -148,8 +148,8 @@ export default function HeartCanvas() {
     const HEART_N       = isMobile ? 1400 : 2500;
     const STAR_N        = isMobile ? 150 : 300;
     // Repulsion parameters — wider breeze area, gentle force, plus cursor dragging!
-    const REPULSE_R     = 135;   // noticeably wider interaction breeze
-    const REPULSE_F     = 0.35;  // modest direct push to keep movement extremely smooth & beautiful
+    const REPULSE_R     = 165;   // noticeably wider interaction breeze (flowing water splash)
+    const REPULSE_F     = 0.65;  // modest direct push to keep movement extremely smooth & beautiful
     const REPULSE_DEAD  = 8;     // tiny dead-zone at cursor centre
     const BEAT_PERIOD   = 130;      // frames per heartbeat cycle
     const BEAT_PEAK_PH  = 0.10;    // normalised phase where first bump peaks
@@ -462,6 +462,12 @@ export default function HeartCanvas() {
       const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 5, sc);
       if (pts.length === 0) return;
 
+      // Shuffle pts so if we don't have enough particles, they are distributed uniformly across all letters
+      for (let i = pts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pts[i], pts[j]] = [pts[j], pts[i]];
+      }
+
       // Shuffle candidates so particles are chosen uniformly from that side of the heart
       for (let i = candidates.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -664,7 +670,7 @@ export default function HeartCanvas() {
             const falloff = smoothstep(REPULSE_R, REPULSE_DEAD, rd);  // 0 at edge, 1 near cursor
             
             // ── 1. Gentle repulsion force ──
-            const str = falloff * 0.15;
+            const str = falloff * REPULSE_F;
             p.vx += (rdx / rd) * str;
             p.vy += (rdy / rd) * str;
 
@@ -685,16 +691,16 @@ export default function HeartCanvas() {
         if (p.state === "easter_egg") {
           if (eggPhaseRef.current === "dissolving") {
             // Return to heart ONLY — gentler, slow spring
-            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.018, 0.82);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.018, 0.82);
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, 0.005, 0.90);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, 0.005, 0.90);
             const dx = p.tx - p.x, dy = p.ty - p.y;
             if (dx * dx + dy * dy < 9 && Math.abs(p.vx) < 0.28 && Math.abs(p.vy) < 0.28) {
               p.state = "formed"; p.vx = 0; p.vy = 0;
             }
           } else {
             // Spring toward egg text target — slow, dreamy firefly glide
-            [p.x, p.vx] = springStep(p.x, p.vx, p.etx, 0.015, 0.85);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ety, 0.015, 0.85);
+            [p.x, p.vx] = springStep(p.x, p.vx, p.etx, 0.004, 0.92);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ety, 0.004, 0.92);
           }
 
         } else if (p.state === "formed") {
@@ -711,9 +717,9 @@ export default function HeartCanvas() {
             p.x += p.vx; p.y += p.vy;
             p.vx *= 0.94; p.vy *= 0.94;
           } else {
-            // Spring return with per-particle personality — varied overshoot, organic timing
-            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, p.returnStiffness, p.returnDamping);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, p.returnStiffness, p.returnDamping);
+            // Spring return with per-particle personality — slow and dreamy return
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, p.returnStiffness * 0.15, p.returnDamping * 1.15);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, p.returnStiffness * 0.15, p.returnDamping * 1.15);
             const dx = p.tx - p.x, dy = p.ty - p.y;
             if (dx * dx + dy * dy < 4 && Math.abs(p.vx) < 0.25 && Math.abs(p.vy) < 0.25) {
               p.state = "formed"; p.vx = 0; p.vy = 0;
@@ -725,11 +731,21 @@ export default function HeartCanvas() {
 
         } else if (p.state === "scattered") {
           // Spring return from cursor repulsion — per-particle spring for organic variation
-          // Slightly gentler to make the recovery extremely smooth, slow and graceful
-          const ks = p.returnStiffness * 0.85;
-          const kd = p.returnDamping;
-          [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
-          [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
+          // If cursor is close, we dynamically suspend the return force so it "flows like water"!
+          const rdx = p.x - mx;
+          const rdy = p.y - my;
+          const dist2 = rdx * rdx + rdy * rdy;
+          if (dist2 < repR2 && onCanvas) {
+            const ks = p.returnStiffness * 0.05; // almost no fight, lets it splash freely!
+            const kd = 0.95;
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
+          } else {
+            const ks = p.returnStiffness * 0.18; // dreamy slow drift back
+            const kd = 0.91;
+            [p.x, p.vx] = springStep(p.x, p.vx, p.tx, ks, kd);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.ty, ks, kd);
+          }
           const dx = p.tx - p.x, dy = p.ty - p.y;
           if (dx * dx + dy * dy < 5 && Math.abs(p.vx) < 0.20 && Math.abs(p.vy) < 0.20) {
             p.state = "formed"; p.vx = 0; p.vy = 0;
@@ -749,6 +765,12 @@ export default function HeartCanvas() {
       if (eggPhaseRef.current === "dissolving") {
         const stillEgg = particles.some(p => p.state === "easter_egg");
         if (!stillEgg) eggPhaseRef.current = "idle";
+      }
+
+      // Dynamically fade out click hint caption when in final monthsary message screen
+      const caption = document.getElementById("click-caption");
+      if (caption) {
+        caption.style.opacity = finalStateRef.current ? "0" : "0.55";
       }
 
       drawHeartGlow(cx, cy, scale);
@@ -944,10 +966,11 @@ export default function HeartCanvas() {
         style={{ position: "absolute", inset: 0, display: "block", cursor: "default" }}
       />
       <div
+        id="click-caption"
         style={{
           position: "absolute",
           left: "50%",
-          top: "16%",
+          bottom: "22%",
           transform: "translateX(-50%)",
           fontFamily: "'Inter', system-ui, sans-serif",
           fontSize: "clamp(10px, 1.8vw, 12px)",
@@ -956,6 +979,8 @@ export default function HeartCanvas() {
           letterSpacing: "0.15em",
           textAlign: "center",
           whiteSpace: "nowrap",
+          opacity: 0.55,
+          transition: "opacity 1s ease-in-out",
           animation: "pulseGlow 2.5s infinite ease-in-out",
           textShadow: "0 0 10px rgba(255, 110, 145, 0.12)"
         }}

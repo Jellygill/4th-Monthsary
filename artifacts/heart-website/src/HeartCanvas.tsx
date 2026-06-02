@@ -85,9 +85,10 @@ function sampleTextPixels(
   text: string, canvasW: number, canvasH: number,
   cx: number, cy: number, _scale: number
 ): { x: number; y: number }[] {
-  // Use most of the canvas width so long strings like "For Mary Iris ❤️" never clip
+  // Use most of the canvas width so long strings never clip
   const W = Math.floor(canvasW * 0.88);
-  const H = Math.floor(canvasH * 0.14);
+  // Taller canvas = thicker, more pixel-dense strokes
+  const H = Math.floor(canvasH * 0.20);
   const tmp = document.createElement("canvas");
   tmp.width = W; tmp.height = H;
   const c = tmp.getContext("2d")!;
@@ -95,36 +96,26 @@ function sampleTextPixels(
   c.fillRect(0, 0, W, H);
   c.fillStyle = "#fff";
   // Bold weight + generous font size so strokes are thick and pixel-dense
-  let fs = Math.max(16, Math.floor(H * 0.62));
-  c.font = `700 ${fs}px Georgia, serif`;
-  while (c.measureText(text).width > W * 0.92 && fs > 12) {
+  let fs = Math.max(20, Math.floor(H * 0.55));
+  c.font = `800 ${fs}px Georgia, serif`;
+  while (c.measureText(text).width > W * 0.92 && fs > 14) {
     fs -= 1;
-    c.font = `700 ${fs}px Georgia, serif`;
+    c.font = `800 ${fs}px Georgia, serif`;
   }
   c.textAlign = "center";
   c.textBaseline = "middle";
   c.fillText(text, W / 2, H / 2);
   const data = c.getImageData(0, 0, W, H).data;
   const pts: { x: number; y: number }[] = [];
-  const step = 1;          // sample every pixel for denser, clearer letterforms
-  const isLongPhrase = text.length >= 28;
-  const isVeryLongPhrase = text.length >= 40;
-  // Longer phrases need more sampled stroke points to keep letters readable.
-  const alphaThreshold = isVeryLongPhrase ? 50 : (isLongPhrase ? 58 : 80);
-  const extraCopies = isVeryLongPhrase ? 2 : (isLongPhrase ? 2 : 1);
-  for (let y = 0; y < H; y += step) {
-    for (let x = 0; x < W; x += step) {
+  // Lower threshold captures anti-aliased edges → denser, crisper letterforms
+  const alphaThreshold = 40;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
       if (data[(y * W + x) * 4] > alphaThreshold) {
-        const baseX = cx + (x - W / 2);
-        const baseY = cy - _scale * 7 + (y - H / 2);
-        pts.push({ x: baseX, y: baseY });
-        // Duplicate long-phrase points with tiny jitter to increase apparent stroke density.
-        for (let i = 1; i < extraCopies; i++) {
-          pts.push({
-            x: baseX + (Math.random() - 0.5) * 0.35,
-            y: baseY + (Math.random() - 0.5) * 0.35,
-          });
-        }
+        pts.push({
+          x: cx + (x - W / 2),
+          y: cy - _scale * 7 + (y - H / 2),
+        });
       }
     }
   }
@@ -494,14 +485,18 @@ export default function HeartCanvas() {
       const pts = sampleTextPixels(msg, width, height, cx, cy - sc * 11, sc);
       if (pts.length === 0) return;
 
-      // Keep letter structure readable by downsampling points in-order instead of random shuffling.
-      // Random selection makes dotted noise; ordered stride preserves the text shape.
+      // Downsample text pixels evenly across the full point set (no random start offset)
+      // so every character region gets proportional coverage — preserving letter shapes.
       const use = Math.min(EGG_N, candidates.length, pts.length);
-      const start = Math.floor(Math.random() * Math.max(1, pts.length - use + 1));
-      const step = use > 1 ? (pts.length - 1) / (use - 1) : 1;
+      const stride = pts.length / use;
+
+      // Shuffle candidates so particles come from all over the heart, not just one region.
+      // This avoids a lopsided hole in the heart while the text is forming.
+      const shuffled = candidates.slice().sort(() => Math.random() - 0.5);
+
       for (let i = 0; i < use; i++) {
-        const p = candidates[i];
-        const pick = Math.min(pts.length - 1, Math.floor(start + i * step));
+        const p = shuffled[i];
+        const pick = Math.min(pts.length - 1, Math.floor(i * stride));
         p.etx = pts[pick].x;
         p.ety = pts[pick].y;
         p.state = "easter_egg";
@@ -779,9 +774,11 @@ export default function HeartCanvas() {
         // Displaced particles dim very subtly — they're still beautiful, just displaced
         const displacedDim = (p.state === "scattered") ? 0.82 : 1.0;
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
-        // Easter-egg particles render tight and bright to keep letterforms crisp
-        const drawSize = p.state === "easter_egg" ? p.size * 0.7 : p.size;
-        const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.9, 1) : op;
+        // Easter-egg particles render at a fixed uniform size so every letter
+        // gets the same dot density — no giant blobs next to tiny invisible dots.
+        const EASTER_EGG_SIZE = 0.95;
+        const drawSize = p.state === "easter_egg" ? EASTER_EGG_SIZE : p.size;
+        const drawOp   = p.state === "easter_egg" ? Math.min(op * 2.6, 1) : op;
         if (p.state === "easter_egg") {
           drawParticle(p.x, p.y, drawSize, drawOp, textSprite);
         } else {

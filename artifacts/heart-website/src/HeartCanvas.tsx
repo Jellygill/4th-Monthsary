@@ -121,13 +121,18 @@ function sampleTextPixels(
   }
   if (grid.length === 0) return [];
 
+  // Shuffle grid to avoid geometric scanline artifacts (moiré pattern)
+  for (let i = grid.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [grid[i], grid[j]] = [grid[j], grid[i]];
+  }
+
   // Map the collected grid points to the exact targetCount.
   const out: { x: number; y: number }[] = [];
   if (grid.length >= targetCount) {
-    // If we have more pixels than particles, stride evenly.
-    const stride = grid.length / targetCount;
+    // Take a random subset of pixels
     for (let i = 0; i < targetCount; i++) {
-      out.push(grid[Math.floor(i * stride)]);
+      out.push(grid[i]);
     }
   } else {
     // If we have fewer pixels than particles, cycle and add tiny jitter for density glow.
@@ -283,20 +288,20 @@ export default function HeartCanvas() {
       textSprite.height = size;
       const tctx = textSprite.getContext("2d")!;
       const tHalo = tctx.createRadialGradient(center, center, 0, center, center, radius);
-      tHalo.addColorStop(0,   "rgba(255,140,190,0.28)");
-      tHalo.addColorStop(0.55,"rgba(255,96,164,0.12)");
+      tHalo.addColorStop(0,   "rgba(255,140,190,0.60)");
+      tHalo.addColorStop(0.55,"rgba(255,96,164,0.30)");
       tHalo.addColorStop(1,   "rgba(255,96,164,0)");
       tctx.beginPath();
       tctx.arc(center, center, radius, 0, Math.PI * 2);
       tctx.fillStyle = tHalo;
       tctx.fill();
       tctx.beginPath();
-      tctx.arc(center, center, size * 0.07, 0, Math.PI * 2);
-      tctx.fillStyle = "rgba(255,160,206,0.98)";
+      tctx.arc(center, center, size * 0.08, 0, Math.PI * 2);
+      tctx.fillStyle = "rgba(255,180,216,1.0)";
       tctx.fill();
       tctx.beginPath();
-      tctx.arc(center, center, size * 0.03, 0, Math.PI * 2);
-      tctx.fillStyle = "rgba(255,226,239,0.95)";
+      tctx.arc(center, center, size * 0.04, 0, Math.PI * 2);
+      tctx.fillStyle = "rgba(255,255,255,1.0)";
       tctx.fill();
     }
 
@@ -782,8 +787,8 @@ export default function HeartCanvas() {
         const op = p.baseOpacity * ta * globalBrightness * displacedDim;
 
         if (p.state === "easter_egg") {
-          // Use a soft, small glow sprite so it feels magical but remains readable
-          drawParticle(p.x, p.y, 0.45, Math.min(1, p.baseOpacity * 3.8 * globalBrightness), textSprite);
+          // Use a bright, small glow sprite so it feels magical but remains readable
+          drawParticle(p.x, p.y, 0.45, Math.min(1, p.baseOpacity * 5.5 * globalBrightness), textSprite);
         } else {
           drawParticle(p.x, p.y, p.size, op, p.sprite);
         }
@@ -1033,9 +1038,9 @@ export default function HeartCanvas() {
 
 // ── Music Player ─────────────────────────────────────────────────────────
 const TRACKS = [
-  { src: "/bruno-mars.mp3",    label: "Bruno Mars" },
-  { src: "/marias.mp3",        label: "The Marías" },
-  { src: "/daniel-caesar.mp3", label: "Daniel Caesar" },
+  { src: "bruno-mars.mp3",    label: "Bruno Mars" },
+  { src: "marias.mp3",        label: "The Marías" },
+  { src: "daniel-caesar.mp3", label: "Daniel Caesar" },
 ];
 
 function MusicPlayer() {

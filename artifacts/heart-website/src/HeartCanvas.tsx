@@ -106,13 +106,23 @@ function sampleTextPixels(
   const data = c.getImageData(0, 0, W, H).data;
   const pts: { x: number; y: number }[] = [];
   const step = 1;          // sample every pixel for denser, clearer letterforms
+  const isLongPhrase = text.length >= 28;
+  // Long phrases need extra density so letter strokes remain readable.
+  const alphaThreshold = isLongPhrase ? 55 : 80;
+  const extraCopies = isLongPhrase ? 2 : 1;
   for (let y = 0; y < H; y += step) {
     for (let x = 0; x < W; x += step) {
-      if (data[(y * W + x) * 4] > 80) {
-        pts.push({
-          x: cx + (x - W / 2),
-          y: cy - _scale * 7 + (y - H / 2),
-        });
+      if (data[(y * W + x) * 4] > alphaThreshold) {
+        const baseX = cx + (x - W / 2);
+        const baseY = cy - _scale * 7 + (y - H / 2);
+        pts.push({ x: baseX, y: baseY });
+        // Duplicate long-phrase points with tiny jitter to increase apparent stroke density.
+        for (let i = 1; i < extraCopies; i++) {
+          pts.push({
+            x: baseX + (Math.random() - 0.5) * 0.8,
+            y: baseY + (Math.random() - 0.5) * 0.8,
+          });
+        }
       }
     }
   }

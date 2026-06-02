@@ -808,12 +808,6 @@ export default function HeartCanvas() {
         if (!stillEgg) eggPhaseRef.current = "idle";
       }
 
-      // Dynamically fade out click hint caption when in final monthsary message screen
-      const caption = document.getElementById("click-caption");
-      if (caption) {
-        caption.style.opacity = finalStateRef.current ? "0" : "0.55";
-      }
-
       drawHeartGlow(cx, cy, scale);
       drawOrbitRing(cx, cy, scale);
       drawSparkles(cx, cy, scale);

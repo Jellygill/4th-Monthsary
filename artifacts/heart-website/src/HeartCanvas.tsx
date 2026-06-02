@@ -636,7 +636,7 @@ export default function HeartCanvas() {
       const captionEl = document.getElementById("click-caption");
       if (captionEl) {
         if (easterEggAllowedRef.current && eggPhaseRef.current === "idle") {
-          captionEl.style.opacity = "0.65";
+          captionEl.style.opacity = "1";
         } else {
           captionEl.style.opacity = "0";
         }
@@ -998,8 +998,8 @@ export default function HeartCanvas() {
     <div style={{ position: "fixed", inset: 0, overflow: "hidden" }}>
       <style>{`
         @keyframes pulseGlow {
-          0%, 100% { opacity: 0.20; transform: translateX(-50%) scale(0.97); }
-          50% { opacity: 0.55; transform: translateX(-50%) scale(1.03); }
+          0%, 100% { opacity: 0.20; transform: scale(0.97); }
+          50% { opacity: 0.55; transform: scale(1.03); }
         }
         @keyframes musicPulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(255,110,145,0.0); }
@@ -1021,20 +1021,25 @@ export default function HeartCanvas() {
           left: "50%",
           bottom: "2.5%",
           transform: "translateX(-50%)",
-          fontFamily: "'Inter', system-ui, sans-serif",
-          fontSize: "clamp(10px, 1.8vw, 12px)",
-          color: "rgba(255, 198, 212, 0.42)",
           pointerEvents: "none",
-          letterSpacing: "0.15em",
-          textAlign: "center",
-          whiteSpace: "nowrap",
           opacity: 0,
-          transition: "opacity 1.5s ease-in-out",
-          animation: "pulseGlow 2.5s infinite ease-in-out",
-          textShadow: "0 0 10px rgba(255, 110, 145, 0.12)"
+          transition: "opacity 1.5s ease-in-out"
         }}
       >
-        ( touch the heart for a surprise 🩷 )
+        <div
+          style={{
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: "clamp(10px, 1.8vw, 12px)",
+            color: "rgba(255, 198, 212, 0.42)",
+            letterSpacing: "0.15em",
+            textAlign: "center",
+            whiteSpace: "nowrap",
+            animation: "pulseGlow 2.5s infinite ease-in-out",
+            textShadow: "0 0 10px rgba(255, 110, 145, 0.12)"
+          }}
+        >
+          ( touch the heart for a surprise 🩷 )
+        </div>
       </div>
       <div
         ref={overlayRef}

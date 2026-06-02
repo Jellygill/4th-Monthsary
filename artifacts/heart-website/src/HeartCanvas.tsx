@@ -134,7 +134,7 @@ export default function HeartCanvas() {
     const ctx = canvas.getContext("2d")!;
     let raf: number;
 
-    const HEART_N       = 2600;
+    const HEART_N       = 3000;
     const STAR_N        = 300;
     const REPULSE_R     = 115;
     const REPULSE_F     = 3.5;
@@ -220,22 +220,29 @@ export default function HeartCanvas() {
       }
     }
 
-    // ── draw a single glowing particle (1 gradient = 3× faster) ────────
+    // ── draw a single glowing particle ──────────────────────────────────
     function drawParticle(
       x: number, y: number, size: number, opacity: number,
       r: number, g: number, b: number
     ) {
       const a = Math.min(1, Math.max(0, opacity));
       if (a < 0.015) return;
-      const rad = size * 5.5;
-      // Single 3-stop gradient: white core → rose colour → transparent
-      const grd = ctx.createRadialGradient(x, y, 0, x, y, rad);
-      grd.addColorStop(0,    `rgba(255,238,242,${Math.min(a * 1.5, 1)})`);
-      grd.addColorStop(0.28, `rgba(${r},${g},${b},${a * 0.82})`);
-      grd.addColorStop(1,    `rgba(${r},${g},${b},0)`);
+
+      // Wide soft halo: the atmospheric glow around each particle
+      const haloR = size * 7;
+      const halo = ctx.createRadialGradient(x, y, 0, x, y, haloR);
+      halo.addColorStop(0,   `rgba(${r},${g},${b},${a * 0.22})`);
+      halo.addColorStop(0.5, `rgba(${r},${g},${b},${a * 0.08})`);
+      halo.addColorStop(1,   `rgba(${r},${g},${b},0)`);
       ctx.beginPath();
-      ctx.arc(x, y, rad, 0, Math.PI * 2);
-      ctx.fillStyle = grd;
+      ctx.arc(x, y, haloR, 0, Math.PI * 2);
+      ctx.fillStyle = halo;
+      ctx.fill();
+
+      // Bright pinpoint core — the key "stardust / firefly" detail
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,242,246,${Math.min(a * 1.6, 1)})`;
       ctx.fill();
     }
 
@@ -364,8 +371,8 @@ export default function HeartCanvas() {
             }
           }
           if (p.state === "gathering") {
-            [p.x, p.vx] = springStep(p.x, p.vx, p.baseTx, 0.032, 0.80);
-            [p.y, p.vy] = springStep(p.y, p.vy, p.baseTy, 0.032, 0.80);
+            [p.x, p.vx] = springStep(p.x, p.vx, p.baseTx, 0.018, 0.82);
+            [p.y, p.vy] = springStep(p.y, p.vy, p.baseTy, 0.018, 0.82);
             const dx = p.baseTx - p.x, dy = p.baseTy - p.y;
             if (dx * dx + dy * dy < 4) {
               p.state = "formed"; p.x = p.baseTx; p.y = p.baseTy; p.vx = 0; p.vy = 0;
@@ -375,7 +382,7 @@ export default function HeartCanvas() {
           drawParticle(p.x, p.y, p.size, p.opacity * ta, p.r, p.g, p.b);
         }
 
-        const mostlyFormed = gatherFrame > 300;
+        const mostlyFormed = gatherFrame > 420;
         if (mostlyFormed) {
           appPhase = "beating";
           for (const p of particles) {
